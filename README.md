@@ -2,6 +2,10 @@
 
 Healing Agent is an intelligent code assistant that automatically detects and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and error-free code.
 
+⚠️ Not intended for production use. Be extra careful with it, as although it could make backups of your code, it might not always do so correctly, and actually changes your code. ⚠️
+
+Goal: first autonomous actually usable coding agent in production (after Cursor AI)?
+
 ## Table of Contents 📚
 
 - [Features](#features-✨)
@@ -19,6 +23,24 @@ Healing Agent is an intelligent code assistant that automatically detects and fi
 - 🔍 Intelligent code analysis: It analyzes the error details, including the exception type, error message, and traceback, to understand the root cause of the issue.
 - 🧠 AI-powered (LLM) code healing: Healing Agent uses advanced AI algorithms to generate code fixes and suggestions based on the error context and best practices.
 - 🔧 Seamless integration: It integrates seamlessly with your existing Python projects, requiring minimal setup and configuration.
+
+## How it works 🧠
+```mermaid
+graph TD
+    A[Start: from healing_agent import healing_agent] --> B[Configuration: AI access etc.]
+    B --> C[Decorate your functions: healing_agent]
+    C --> D[Run Your Code]
+    D --> E{Exception?}
+    E -->|Yes| F[Save context of errors]
+    F --> G[Generate Code Fixes with AI]
+    G --> H[Test Generated Code]
+    H --> I[Create backup of code]
+    I --> J[Apply Code Fixes]
+    J --> D
+    E -->|No| M{Execution Complete?}
+    M -->|No| D
+    M -->|Yes| L[End]
+```
 
 ## Installation 💻
 
@@ -38,6 +60,12 @@ To install Healing Agent, follow these steps:
    ```bash
    pip install -e .
    ```
+
+OR install as a PIP package from GitHub:
+
+```bash
+pip install git+https://github.com/matebenyovszky/healing-agent
+```
 
 ## Usage 🔧
 
@@ -59,7 +87,7 @@ To use Healing Agent in your project, follow these steps:
 
 ## Configuration ⚙️
 
-Healing Agent can be configured to suit your needs. It uses `healing_agent_config.py` to set the AI provider and associated API keys. It automatically loads the configuration from `healing_agent_config.py` if it exists, otherwise it will use the default configuration. It copies the default configuration to `healing_agent_config.py` if it doesn't exist to your default configuration directory.
+Healing Agent is designed to be highly customizable. It leverages `healing_agent_config.py` to define the AI provider and its corresponding API keys. Upon initialization, Healing Agent automatically attempts to load the configuration from `healing_agent_config.py`. If this file does not exist, it defaults to the pre-defined configuration. Additionally, if `healing_agent_config.py` is missing, Healing Agent automatically creates it in the default configuration directory, ensuring a seamless setup process.
 
 ## Testing 🧪
 
@@ -67,21 +95,8 @@ To test Healing Agent, you can use the `scripts/test_file_generator.py` script t
 
 ## Use Cases 💡
 
-- **Development**: Use Healing Agent during development to catch and fix errors early.
-- **Production Monitoring**: Integrate Healing Agent into your production environment to monitor and automatically fix errors in real-time.
-- **Educational Tool**: Use Healing Agent as a learning tool to understand common coding errors and how to fix them.
-
-Not intended for production use.
-
-## Contributing 🤝
-
-We welcome contributions from the community! To contribute:
-
-1. Fork the repository.
-2. Create a new branch (`git checkout -b feature/YourFeature`).
-3. Commit your changes (`git commit -m 'Add some feature'`).
-4. Push to the branch (`git push origin feature/YourFeature`).
-5. Open a pull request.
+- **Development**: Use Healing Agent during development to catch and fix errors early, and let AI generate fixes for your code. This is what you would do anyways, but now it's automated. 😁
+- **Educational Tool**: Use Healing Agent as a learning tool to understand AI coding capabilities and limitations.
 
 ## License 📜
 

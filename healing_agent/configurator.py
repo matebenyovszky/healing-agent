@@ -23,14 +23,12 @@ def setup_config():
         # Create the .healing_agent directory if it doesn't exist
         os.makedirs(os.path.dirname(config_path), exist_ok=True)
         
-        # Get the absolute path to the examples directory relative to this script
-        examples_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'examples')
-        example_config = os.path.join(examples_dir, 'healing_agent_config.py')
+        # Get the absolute path to the example config file
+        example_config = os.path.join(os.path.dirname(__file__), 'healing_agent_config.py')
         
         # Copy the example config using platform-agnostic paths
         shutil.copy(example_config, config_path)
         print(f"♣ Created new config file at, please update the values: {config_path}")
         return config_path
-    
 if __name__ == "__main__":
     setup_config()

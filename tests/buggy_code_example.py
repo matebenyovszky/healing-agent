@@ -21,10 +21,9 @@ def divide_numbers(a=None, b=None):
     if b is None:
         b = random.randint(0, 2)
     print(f'Attempting to divide {a} by {b}')
-    try:
-        return a / b
-    except ZeroDivisionError:
-        return 'Error: Cannot divide by zero.'
+    if b == 0:
+        return 'Error: Cannot divide by zero'
+    return a / b
 
 
 @healing_agent
@@ -34,12 +33,10 @@ def access_list(index=None):
     my_list = [1, 2, 3]
     if index is None:
         index = random.randint(0, len(my_list) - 1)
-    if index < 0 or index >= len(my_list):
-        raise IndexError(
-            f'Index {index} is out of bounds for list of length {len(my_list)}'
-            )
     print(
         f'Attempting to access index {index} in list of length {len(my_list)}')
+    if index < 0 or index >= len(my_list):
+        raise IndexError('Index is out of range')
     return my_list[index]
 
 
@@ -62,8 +59,7 @@ def type_conversion(value=None):
     try:
         return int(value)
     except ValueError:
-        print(f"Error: '{value}' is not a valid integer.")
-        return None
+        return f'Error: cannot convert {value} to integer'
 
 
 @healing_agent
@@ -74,19 +70,24 @@ def key_error_example(key=None):
     if key is None:
         key = random.choice(['a', 'b', 'c'])
     print(f"Attempting to access key '{key}' in dictionary")
-    return my_dict.get(key, f"KeyError: '{key}' not found in the dictionary")
+    return my_dict.get(key, f"Error: Key '{key}' not found in dictionary"
+        ) if key in my_dict else f"Error: Key '{key}' not found in dictionary"
 
 
 @healing_agent
 def index_error_example(index=None):
     """Deliberately tries to access an invalid index in a string"""
+    import random
     my_string = 'hello'
     if index is None:
         index = random.randint(-10, 10)
     print(f"Attempting to access index {index} in string '{my_string}'")
-    if index < 0 or index >= len(my_string):
-        return 'Index out of range'
-    return my_string[index]
+    try:
+        if index < 0:
+            index += len(my_string)
+        return my_string[index]
+    except IndexError:
+        return 'Error: Index is out of range'
 
 
 @healing_agent
@@ -99,9 +100,9 @@ def attribute_error_example():
     obj = MyClass()
     print("Attempting to access non-existent attribute 'attr'")
     try:
-        return obj.attr
+        return getattr(obj, 'attr')
     except AttributeError:
-        return "AttributeError: 'MyClass' object has no attribute 'attr'"
+        return "Error: Attribute 'attr' does not exist"
 
 
 def main():
