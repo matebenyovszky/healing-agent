@@ -46,6 +46,14 @@ graph TD
 
 To install Healing Agent, follow these steps:
 
+PIP package from GitHub:
+
+```bash
+pip install git+https://github.com/matebenyovszky/healing-agent
+```
+
+OR from source:
+
 1. Clone the repository:
    ```bash
    git clone https://github.com/matebenyovszky/healing-agent.git
@@ -60,12 +68,10 @@ To install Healing Agent, follow these steps:
    ```bash
    pip install -e .
    ```
-
-OR install as a PIP package from GitHub:
-
-```bash
-pip install git+https://github.com/matebenyovszky/healing-agent
-```
+   OR run overall test to install and test functionality:
+   ```bash
+   python scripts/overall_test.py
+   ```
 
 ## Usage 🔧
 
@@ -73,12 +79,18 @@ To use Healing Agent in your project, follow these steps:
 
 1. Import the `healing_agent` decorator in your Python file:
    ```python
-   from healing_agent.healing_agent import healing_agent
+   import healing_agent
    ```
 
 2. Decorate the function you want to monitor with `@healing_agent`:
    ```python
    @healing_agent
+   def your_function():
+       # Your code here
+   ```
+   You can also pass parameters to the decorator to change the behavior set in the config file:
+   ```python
+   @healing_agent(AUTO_FIX=False)
    def your_function():
        # Your code here
    ```

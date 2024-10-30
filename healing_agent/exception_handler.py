@@ -6,6 +6,7 @@ import inspect
 import sys
 import ast
 from typing import Optional, Any, Dict, Callable
+from requests.exceptions import JSONDecodeError
 
 def safe_str(obj: Any) -> str:
     """
@@ -15,6 +16,71 @@ def safe_str(obj: Any) -> str:
         return str(obj)
     except Exception:
         return f"<Unprintable {type(obj).__name__} object>"
+def handle_json_decode_error(context: Dict[str, Any], error: JSONDecodeError, kwargs: dict) -> Dict[str, Any]:
+    """
+    Enhance context with JSON decode error specific information.
+    Captures the problematic JSON section and attempts to identify structural issues.
+    """
+    print("\n♣ Handling JSONDecodeError specifically:")
+    try:
+        # Add JSON specific error details
+        response = kwargs.get('response')
+        if response:
+            # Get error position and surrounding context
+            error_pos = error.pos
+            text = response.text
+            start_pos = max(0, error_pos - 1000)
+            end_pos = min(len(text), error_pos + 1000)
+            
+            # Extract context around error
+            context_before = text[start_pos:error_pos]
+            context_after = text[error_pos:end_pos]
+            problematic_char = text[error_pos] if error_pos < len(text) else 'EOF'
+
+            # Try to identify common JSON structural issues
+            structural_hints = []
+            if problematic_char in '{[':
+                structural_hints.append("Unclosed object/array?")
+            elif problematic_char in '}]':
+                structural_hints.append("Extra closing bracket/brace?")
+            elif problematic_char == ':':
+                structural_hints.append("Missing value or invalid key?")
+            elif problematic_char == ',':
+                structural_hints.append("Trailing comma or missing value?")
+
+            context['error']['json_details'] = {
+                'response_text': response.text,
+                'doc': error.doc,
+                'pos': error.pos,
+                'lineno': error.lineno,
+                'colno': error.colno,
+                'msg': error.msg,
+                'context_before_error': context_before,
+                'context_after_error': context_after,
+                'problematic_char': problematic_char,
+                'structural_hints': structural_hints
+            }
+
+            # Print detailed debug information
+            print(f"♣ Error position: Line {error.lineno}, Column {error.colno}")
+            print(f"♣ Error message: {error.msg}")
+            print(f"♣ Problematic character: '{problematic_char}'")
+            print(f"♣ Context around error (+/- 1000 chars):")
+            print("Before error:")
+            print(f"{context_before[-200:]}") # Last 200 chars before error
+            print("\n>>> Error occurs here <<<\n")
+            print("After error:")
+            print(f"{context_after[:200]}") # First 200 chars after error
+            if structural_hints:
+                print(f"♣ Possible structural issues: {', '.join(structural_hints)}")
+
+    except Exception as e:
+        print(f"♣ Failed to capture JSON decode details: {str(e)}")
+        context['error']['json_details'] = {
+            'error': f'Failed to capture JSON details: {str(e)}'
+        }
+    
+    return context
 
 def get_function_source(func: Callable) -> tuple[list[str], int]:
     """
@@ -136,6 +202,10 @@ def handle_exception(
             if not attr.startswith('_') and not callable(getattr(error, attr))
         }
     }
+
+    # Handle JSONDecodeError specifically if needed
+    if isinstance(error, JSONDecodeError):
+        context = handle_json_decode_error(context, error, kwargs or {})
 
     # Add full traceback information for debugging
     context['error']['traceback_frames'] = [{
