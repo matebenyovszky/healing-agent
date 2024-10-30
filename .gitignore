@@ -2,6 +2,8 @@ config.py
 *.json
 ideas.md
 .tokens
+.ideas
+.initialprompt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

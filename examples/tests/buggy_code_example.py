@@ -2,15 +2,14 @@
 try:
     import healing_agent
     print("Found healing_agent as module")
-    print(f"Module location: {healing_agent.__file__}")
 except ImportError as e:
     print(f"Cannot import healing_agent directly: {e}")
 
-try:
-    from healing_agent import healing_agent
-    print("Successfully imported healing_agent decorator")
-except ImportError as e:
-    print(f"Cannot import healing_agent.healing_agent: {e}")
+# try:
+#     from healing_agent import healing_agent
+#     print("Successfully imported healing_agent decorator")
+# except ImportError as e:
+#     print(f"Cannot import healing_agent.healing_agent: {e}")
 
 import random
 

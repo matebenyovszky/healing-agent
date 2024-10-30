@@ -5,6 +5,21 @@ import requests
 import shutil
 from pathlib import Path
 
+def get_version_from_toml():
+    """Get version from pyproject.toml file."""
+    try:
+        with open("pyproject.toml", "r") as f:
+            lines = f.readlines()
+            for line in lines:
+                if line.strip().startswith("version = "):
+                    # Extract version from line like 'version = "0.1.2"'
+                    version = line.split("=")[1].strip().strip('"').strip("'")
+                    return version
+        raise Exception("Version not found in pyproject.toml")
+    except Exception as e:
+        print(f"♣ Error reading version from pyproject.toml: {str(e)}")
+        sys.exit(1)
+
 def install_package(package):
     """Install a Python package using pip."""
     try:
@@ -121,11 +136,8 @@ def create_github_release_and_upload_assets(version):
 
 def main():
     """Main function to handle the release process."""
-    if len(sys.argv) != 2:
-        print("Usage: python github_package_upload.py <version>")
-        sys.exit(1)
-
-    version = sys.argv[1]
+    # Get version from pyproject.toml
+    version = get_version_from_toml()
     
     print(f"♣ Starting GitHub package release process for version {version}")
     print("="*60)
