@@ -58,11 +58,6 @@ AUTO_FIX = True  # Automatically apply fixes without confirmation
 # -----------------------------
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
-SAVE_ANALYSIS = True  # Save AI analysis results
-BACKUP_FOLDER = "./healing_agent_backups"  # Backup storage location. Could be like ~/.healing_agent/backups or ./backups
-LOGS_FOLDER = "./healing_agent_logs"  # Log file location. Could be like ~/.healing_agent/logs or ./logs
-EXCEPTION_FOLDER = "./healing_agent_exceptions"  # Exception context storage
-ANALYSIS_FOLDER = "./healing_agent_analysis"  # Analysis results storage
 
 # Validation
 def validate_config():

@@ -86,18 +86,10 @@ def attribute_error_example():
 
 
     class MyClass:
-
-        def __init__(self):
-            self.attr = 'Attribute exists now'
+        pass
     obj = MyClass()
-    print("Attempting to access attribute 'attr'")
-    try:
-        return obj.attr
-    except AttributeError as e:
-        print(f'Error: {e.args[0]}')
-        print(f'Object: {obj}')
-        print(f'Available attributes: {dir(obj)}')
-        return None
+    print("Attempting to access non-existent attribute 'attr'")
+    return obj.attr
 
 
 def main():
