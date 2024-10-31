@@ -34,7 +34,7 @@ def build_and_upload_to_pypi(use_test_pypi=True):
     """Build and upload package to PyPI or TestPyPI."""
     # Get token from environment variable
     token = os.getenv('TWINE_PASSWORD')
-    
+     
     if not token:
         print("♣ Error: TWINE_PASSWORD environment variable must be set with your API token")
         print("♣ Please set it using:")

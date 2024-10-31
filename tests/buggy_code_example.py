@@ -13,18 +13,14 @@ def divide_numbers(a=None, b=None):
     if a is None:
         a = random.randint(1, 10)
     if b is None:
-        b = random.randint(1, 2)
+        b = random.randint(0, 2)
     print(f'Attempting to divide {a} by {b}')
     try:
-        return a / b
-    except ZeroDivisionError as e:
-        print('Error: Attempted to divide by zero. Returning None instead.')
-        print(f'Detailed Error Information: {e}')
-        return None
-    except Exception as e:
-        print('An unexpected error occurred.')
-        print(f'Detailed Error Information: {e}')
-        return None
+        result = a / b
+    except ZeroDivisionError:
+        print('Error: Attempted to divide by zero. Setting result to None.')
+        result = None
+    return result
 
 
 @healing_agent
@@ -46,7 +42,9 @@ def file_operations(filename='nonexistent_file.txt'):
         with open(filename, 'r') as f:
             return f.read()
     except FileNotFoundError as e:
-        print(f"Error: File '{filename}' not found. Details: {e}")
+        print(
+            f'Error: {e.strerror} - {filename} not found. Please check the file path.'
+            )
         return None
 
 
@@ -73,11 +71,19 @@ def key_error_example(key=None):
 @healing_agent
 def index_error_example(index=None):
     """Deliberately tries to access an invalid index in a string"""
+    import random
     my_string = 'hello'
     if index is None:
         index = random.randint(-10, 10)
     print(f"Attempting to access index {index} in string '{my_string}'")
-    return my_string[index]
+    try:
+        if index < 0 or index >= len(my_string):
+            raise IndexError(
+                f"Index {index} is out of range for string '{my_string}'")
+        return my_string[index]
+    except IndexError as e:
+        print(f'Error: {e}')
+        return None
 
 
 @healing_agent
@@ -88,16 +94,16 @@ def attribute_error_example():
     class MyClass:
 
         def __init__(self):
-            self.attr = 'Attribute exists now'
+            self.attr = 'This is an attribute'
     obj = MyClass()
     print("Attempting to access attribute 'attr'")
     try:
         return obj.attr
     except AttributeError as e:
-        print(f'Error: {e.args[0]}')
-        print(f'Object: {obj}')
-        print(f'Available attributes: {dir(obj)}')
-        return None
+        print(f'AttributeError occurred: {e}.')
+        print(
+            f'Detailed Error Information: {e.args}, name: {e.name}, obj: {obj}'
+            )
 
 
 def main():

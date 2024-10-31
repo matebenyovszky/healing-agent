@@ -14,7 +14,7 @@ def decorator_checker(file_path: str) -> bool:
     """
     try:
         # Read the file content
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             content = f.read()
             
         # Parse the content into an AST
@@ -89,7 +89,7 @@ def decorator_checker(file_path: str) -> bool:
             i += 1
             
         # Write back the corrected content
-        with open(file_path, 'w') as f:
+        with open(file_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(new_lines))
             
         print("♣ Successfully updated healing_agent decorators")
@@ -124,7 +124,7 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
             return False
 
         # Parse the original file
-        with open(file_path, 'r') as file:
+        with open(file_path, 'r', encoding='utf-8') as file:
             source = file.read()
         tree = ast.parse(source)
 
@@ -148,7 +148,7 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
         new_source = astor.to_source(tree)
 
         # Write the updated content back to the file
-        with open(file_path, 'w') as file:
+        with open(file_path, 'w', encoding='utf-8') as file:
             file.write(new_source)
 
         return True

@@ -1,9 +1,5 @@
-import inspect
 from functools import wraps
 from typing import Callable, Any
-import sys
-import requests
-import importlib.util
 
 from .exception_handler import handle_exception
 from .ai_code_fixer import fix
@@ -13,27 +9,27 @@ from .code_backup import create_backup
 from .code_replacer import function_replacer
 from .exception_saver import save_context
 
-
-
 def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
         def wrapper(*args, **kwargs):
             try:
-                # Execute the function
-                result = func(*args, **kwargs)
-                return result
-                
+                # Execute the function with minimal overhead
+                return func(*args, **kwargs)
             except Exception as e:
+                # Lazy load imports only when exception occurs
+
+                import inspect
+                import sys
+                import requests
+                import importlib.util
                 
-                # Load the global configuration
+                # Load config only when an exception occurs
                 config = load_config()
-                
                 # Merge local configuration overrides
                 config.update(local_config)
 
                 # Handle the exception
-                context = dict()
                 context = handle_exception(
                     error=e,
                     func=func,
@@ -41,75 +37,6 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                     kwargs=kwargs,
                     config=config
                 )
-                
-                ### Question: Could I move these checks to the exception_handler.py?
-
-                # Check if the exception is a JSONDecodeError
-                if isinstance(e, requests.exceptions.JSONDecodeError):
-                    # Extract first 1000 chars of JSON before handling exception
-                    json_preview = e.doc[:1000] if hasattr(e, 'doc') and e.doc else None
-                    context['error']['json_details'] = {'response_text': json_preview}
-                
-                # Check if the exception is a ConnectionError
-                elif isinstance(e, requests.exceptions.ConnectionError):
-                    # Add connection-specific details to the context
-                    context['error']['connection_details'] = {
-                        'request': e.request.__dict__ if e.request else None,
-                        'response': e.response.__dict__ if e.response else None
-                    }
-                
-                # Check if the exception is a Timeout
-                elif isinstance(e, requests.exceptions.Timeout):
-                    # Add timeout-specific details to the context
-                    context['error']['timeout_details'] = {
-                        'request': e.request.__dict__ if e.request else None,
-                        'timeout': e.args[0] if e.args else None
-                    }
-                
-                # Check if the exception is an HTTPError
-                elif isinstance(e, requests.exceptions.HTTPError):
-                    # Add HTTP-specific details to the context
-                    context['error']['http_details'] = {
-                        'request': e.request.__dict__ if e.request else None,
-                        'response': e.response.__dict__ if e.response else None
-                    }
-                
-                # Check if the exception is a ValueError
-                elif isinstance(e, ValueError):
-                    # Add value-specific details to the context
-                    context['error']['value_details'] = {
-                        'args': e.args
-                    }
-                
-                # Check if the exception is a KeyError
-                elif isinstance(e, KeyError):
-                    # Add key-specific details to the context
-                    context['error']['key_details'] = {
-                        'args': e.args
-                    }
-                
-                # Check if the exception is a TypeError
-                elif isinstance(e, TypeError):
-                    # Add type-specific details to the context
-                    context['error']['type_details'] = {
-                        'args': e.args
-                    }
-                
-                # Check if the exception is a FileNotFoundError
-                elif isinstance(e, FileNotFoundError):
-                    # Add file-specific details to the context
-                    context['error']['file_details'] = {
-                        'filename': e.filename,
-                        'errno': e.errno,
-                        'strerror': e.strerror
-                    }
-                
-                # For any other standard exception, add basic details
-                else:
-                    context['error']['details'] = {
-                        'args': getattr(e, 'args', None),
-                        'message': str(e)
-                    }
                 
                 # Generate AI hint for the exception
                 hint = generate_hint(context, config)
