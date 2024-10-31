@@ -23,14 +23,14 @@ Goal: first autonomous actually usable coding agent in production (after Cursor 
 ## How it works 🧠
 ```mermaid
 graph TD
-    A[Start: import healing_agent] --> B[Configuration: AI access etc.]
-    B --> C[Decorate your functions: healing_agent]
-    C --> D[Run Your Code]
+    A[Import healing_agent] --> B[Configuration: AI access etc.]
+    B --> C[Decorate functions with healing_agent]
+    C --> D[Run Code / Execute Functions]
     D --> E{Exception?}
-    E -->|Yes| F[Save Context of Errors]
-    F --> G[Generate Code Fixes with AI]
+    E -->|Yes| F[Get and Save Detailed Context]
+    F --> G[Auto-generate Fixing hints and Code with AI]
     G --> H[Test Generated Code]
-    H --> I[Create backup of code]
+    H --> I[Create backup - Optional]
     I --> J[Apply Code Fixes]
     J --> D
     E -->|No| M{Execution Complete?}
