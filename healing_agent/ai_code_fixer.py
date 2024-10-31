@@ -1,5 +1,6 @@
 import re
 from typing import Dict, Any
+from .ai_broker import get_ai_response
 
 def ensure_healing_agent_decorator(code: str) -> str:
     """
@@ -23,117 +24,6 @@ def ensure_healing_agent_decorator(code: str) -> str:
     decorator = ' ' * indent + '@healing_agent\n'
     return decorator + code
 
-def get_ai_response(prompt: str, config: Dict) -> str:
-    """
-    Get response from configured AI provider.
-    
-    Args:
-        prompt (str): The prompt to send to the AI
-    
-    Returns:
-        str: The AI generated response
-    """
-    try:
-        provider = config.get('AI_PROVIDER', 'azure').lower()
-        
-        if provider == 'azure':
-            return _get_azure_response(prompt, config['AZURE'])
-        elif provider == 'openai':
-            return _get_openai_response(prompt, config['OPENAI'])
-        elif provider == 'anthropic':
-
-            return _get_anthropic_response(prompt, config['ANTHROPIC'])
-        elif provider == 'ollama':
-            return _get_ollama_response(prompt, config['OLLAMA'])
-        elif provider == 'litellm':
-            return _get_litellm_response(prompt, config['LITELLM'])
-        else:
-            raise ValueError(f"Unsupported AI provider: {provider}")
-            
-    except Exception as e:
-        print(f"♣ Error getting AI response: {str(e)}")
-        raise
-
-def _get_azure_response(prompt: str, config: Dict) -> str:
-    """Handle Azure OpenAI API requests"""
-    import openai
-    client = openai.AzureOpenAI(
-        api_key=config['api_key'],
-        api_version=config['api_version'],
-        azure_endpoint=config['endpoint']
-    )
-    
-    response = client.chat.completions.create(
-        model=config['deployment_name'],
-        messages=[
-            {"role": "system", "content": "You are a Python code fixing assistant. Provide only the corrected code without explanations."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content.strip()
-
-def _get_openai_response(prompt: str, config: Dict) -> str:
-    """Handle OpenAI direct API requests"""
-    import openai
-    client = openai.OpenAI(
-        api_key=config['api_key'],
-        organization=config.get('organization_id')
-    )
-    
-    response = client.chat.completions.create(
-        model=config['model'],
-        messages=[
-            {"role": "system", "content": "You are a Python code fixing assistant. Provide only the corrected code without explanations."},
-            {"role": "user", "content": prompt}
-        ]
-    )
-    return response.choices[0].message.content.strip()
-
-def _get_anthropic_response(prompt: str, config: Dict) -> str:
-    """Handle Anthropic API requests"""
-    import anthropic
-    client = anthropic.Anthropic(api_key=config['api_key'])
-    
-    response = client.messages.create(
-        model=config['model'],
-        max_tokens=1000,
-        messages=[{
-            "role": "user",
-            "content": prompt
-        }]
-    )
-    return response.content[0].text
-
-def _get_ollama_response(prompt: str, config: Dict) -> str:
-    """Handle Ollama API requests"""
-    import requests
-    
-    response = requests.post(
-        f"{config['host']}/api/generate",
-        json={
-            "model": config['model'],
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=config.get('timeout', 120)
-    )
-    return response.json()['response']
-
-def _get_litellm_response(prompt: str, config: Dict) -> str:
-    """Handle LiteLLM API requests"""
-    import litellm
-    if config.get('api_base'):
-        litellm.api_base = config['api_base']
-    
-    response = litellm.completion(
-        model=config['model'],
-        messages=[
-            {"role": "system", "content": "You are a Python code fixing assistant. Provide only the corrected code without explanations."},
-            {"role": "user", "content": prompt}
-        ],
-        api_key=config['api_key']
-    )
-    return response.choices[0].message.content.strip()
 
 def prepare_fix_prompt(context: Dict[str, Any]) -> str:
     """
@@ -148,6 +38,7 @@ def prepare_fix_prompt(context: Dict[str, Any]) -> str:
     # Extract function info if available
     function_info = context.get('function_info', {})
     function_args = context.get('function_arguments', {})
+    error_info = context.get('error', {})
     
     # Build argument info string
     arg_info = ""
@@ -165,18 +56,41 @@ Function Signature: {function_info.get('signature')}
 Module: {function_info.get('module')}
 """
 
+    # Build error details string
+    error_details = ""
+    if error_info.get('exception_attrs'):
+        error_details = "\nDetailed Error Information:\n"
+        for attr, value in error_info['exception_attrs'].items():
+            error_details += f"{attr}: {value}\n"
+
+    # Add traceback frames for context
+    traceback_info = ""
+    if error_info.get('traceback_frames'):
+        traceback_info = "\nTraceback Frames:\n"
+        for frame in error_info['traceback_frames']:
+            traceback_info += f"File: {frame['filename']}, Line {frame['line_number']}, in {frame['function']}\n"
+            traceback_info += f"Code: {frame['code']}\n"
+
+    # Include AI hint if available
+    ai_hint = ""
+    if context.get('ai_hint'):
+        ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
+
     return f"""
-Fix the following Python code that produced an error:
+Fix the following Python code that produced an error, or at least handle the exceptions, add more info that could help debugging next time:
 
 Original Code:
 {context['function_info']['source_code']}
 
 Error Type: {context['error']['type']}
 Error Message: {context['error']['message']}
+Error Line Number: {context['error'].get('line_number')}
+Error Line: {context['error'].get('error_line')}
 
-Stack Trace:
-{context['error']['traceback']}
-{func_info}{arg_info}
+{error_details}
+{traceback_info}
+{func_info}{arg_info}{ai_hint}
+
 Return only the fixed code without any explanations or markdown formatting.
 Ensure the fixed code maintains the same function name and signature.
 Add appropriate error handling where necessary.
@@ -233,8 +147,8 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         # Prepare the prompt for AI
         prompt = prepare_fix_prompt(context)
         
-        # Get the fix from AI
-        fixed_code = get_ai_response(prompt, config)
+        # Get the fix from AI with code_fixer role
+        fixed_code = get_ai_response(prompt, config, "code_fixer")
 
         # Remove markdown code block formatting if present
         fixed_code = re.sub(r'^```python\n|^```\n|```$', '', fixed_code, flags=re.MULTILINE)

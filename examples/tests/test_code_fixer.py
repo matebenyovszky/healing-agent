@@ -2,8 +2,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from healing_agent.code_fixer import fix
-from healing_agent.load_config import load_config
+from healing_agent.ai_code_fixer import fix
+from healing_agent.config_loader import load_config
 def test_code_fixer():
     """Test the code fixer."""
     # Test context

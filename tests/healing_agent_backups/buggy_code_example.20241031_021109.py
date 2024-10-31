@@ -13,17 +13,12 @@ def divide_numbers(a=None, b=None):
     if a is None:
         a = random.randint(1, 10)
     if b is None:
-        b = random.randint(1, 2)
+        b = random.randint(0, 2)
     print(f'Attempting to divide {a} by {b}')
     try:
         return a / b
-    except ZeroDivisionError as e:
+    except ZeroDivisionError:
         print('Error: Attempted to divide by zero. Returning None instead.')
-        print(f'Detailed Error Information: {e}')
-        return None
-    except Exception as e:
-        print('An unexpected error occurred.')
-        print(f'Detailed Error Information: {e}')
         return None
 
 
@@ -42,12 +37,8 @@ def access_list(index=None):
 def file_operations(filename='nonexistent_file.txt'):
     """Deliberately tries to read a non-existent file"""
     print(f'Attempting to read file: {filename}')
-    try:
-        with open(filename, 'r') as f:
-            return f.read()
-    except FileNotFoundError as e:
-        print(f"Error: File '{filename}' not found. Details: {e}")
-        return None
+    with open(filename, 'r') as f:
+        return f.read()
 
 
 @healing_agent
@@ -86,18 +77,10 @@ def attribute_error_example():
 
 
     class MyClass:
-
-        def __init__(self):
-            self.attr = 'Attribute exists now'
+        pass
     obj = MyClass()
-    print("Attempting to access attribute 'attr'")
-    try:
-        return obj.attr
-    except AttributeError as e:
-        print(f'Error: {e.args[0]}')
-        print(f'Object: {obj}')
-        print(f'Available attributes: {dir(obj)}')
-        return None
+    print("Attempting to access non-existent attribute 'attr'")
+    return obj.attr
 
 
 def main():

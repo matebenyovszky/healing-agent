@@ -99,7 +99,7 @@ def decorator_checker(file_path: str) -> bool:
         print(f"♣ Error checking/correcting decorators: {str(e)}")
         return False
 
-def function_replacer(context: Dict, fixed_code: str, config: Optional[Dict] = None) -> bool:
+def function_replacer(context: Dict, fixed_code: str) -> bool:
     """
     Updates the original file by replacing the buggy function with the fixed code using AST.
     
@@ -122,10 +122,6 @@ def function_replacer(context: Dict, fixed_code: str, config: Optional[Dict] = N
         if not all([file_path, function_name, fixed_code]):
             print("♣ Missing required parameters for code replacement")
             return False
-            
-        if config and config.get('DEBUG', False):
-            print(f"♣ Attempting to update file: {file_path}")
-            print(f"♣ Replacing function: {function_name}")
 
         # Parse the original file
         with open(file_path, 'r') as file:
@@ -155,8 +151,6 @@ def function_replacer(context: Dict, fixed_code: str, config: Optional[Dict] = N
         with open(file_path, 'w') as file:
             file.write(new_source)
 
-        if config and config.get('DEBUG', False):
-            print(f"♣ Successfully updated {file_path}")
         return True
 
     except Exception as e:
