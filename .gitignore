@@ -5,6 +5,9 @@ ideas.md
 .ideas
 .initialprompt
 
+tests/healing_agent_exceptions
+tests/healing_agent_backups
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

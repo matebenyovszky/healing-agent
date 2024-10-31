@@ -4,18 +4,40 @@ build-backend = "hatchling.build"
 
 [project]
 name = "healing_agent"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
-    { name = "Máté Benyovszky", email = "benyovszky.mate.work@outlook.com"},
+    { name = "Máté Benyovszky", email = "benyovszky.mate.work@outlook.com" },
 ]
 description = "An AI-powered agent that helps fix and heal buggy code"
 readme = "README.md"
 requires-python = ">=3.9"
+license = { text = "MIT" }
+keywords = [
+    "ai",
+    "debugging",
+    "error-handling",
+    "code-repair",
+    "automation",
+    "developer-tools",
+    "openai",
+    "exception-handling",
+    "code-healing",
+    "bug-fixing"
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Debuggers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Quality Assurance",
+    "Intended Audience :: Information Technology",
+    "Natural Language :: English",
 ]
 dependencies = [
     "openai>=1.12.0",
@@ -26,6 +48,9 @@ dependencies = [
 [project.urls]
 "Homepage" = "https://github.com/matebenyovszky/healing-agent"
 "Bug Tracker" = "https://github.com/matebenyovszky/healing-agent/issues"
+"Documentation" = "https://github.com/matebenyovszky/healing-agent#readme"
+"Repository" = "https://github.com/matebenyovszky/healing-agent.git"
+"Changelog" = "https://github.com/matebenyovszky/healing-agent/blob/main/CHANGELOG.md"
 
 [tool.hatch.build.targets.wheel]
 packages = ["healing_agent"]
