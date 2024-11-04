@@ -14,7 +14,7 @@ def save_context(context: dict) -> Optional[str]:
     """
     try:
         # Create exceptions directory if it doesn't exist
-        exceptions_dir_path = os.path.join(os.path.dirname(context['error']['file']), 'healing_agent_exceptions')
+        exceptions_dir_path = os.path.join(os.path.dirname(context['error']['file']), '_healing_agent_exceptions')
         os.makedirs(exceptions_dir_path, exist_ok=True)
 
         # Create a timestamp-based filename

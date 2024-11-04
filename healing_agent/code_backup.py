@@ -16,7 +16,7 @@ def create_backup(context: dict) -> Optional[str]:
     """
 
     try:
-        backup_folder = os.path.join(os.path.dirname(context['error']['file']), 'healing_agent_backups')
+        backup_folder = os.path.join(os.path.dirname(context['error']['file']), '_healing_agent_backups')
         os.makedirs(backup_folder, exist_ok=True)
         
         # Generate backup filename with timestamp
