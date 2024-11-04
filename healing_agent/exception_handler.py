@@ -24,7 +24,7 @@ def get_function_source(func: Callable) -> tuple[list[str], int]:
     # First try to get source directly from file
     if hasattr(func, '__code__') and hasattr(func.__code__, 'co_filename'):
         file_path = func.__code__.co_filename
-        with open(file_path, 'r') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             source = f.read()
             
         tree = ast.parse(source)
@@ -33,7 +33,7 @@ def get_function_source(func: Callable) -> tuple[list[str], int]:
                 start_line = node.lineno
                 end_line = node.end_lineno
                 
-                with open(file_path, 'r') as f:
+                with open(file_path, 'r', encoding='utf-8') as f:
                     all_lines = f.readlines()
                     source_lines = all_lines[start_line-1:end_line]
                     return source_lines, start_line
@@ -61,9 +61,6 @@ def handle_exception(
     Returns:
         dict: The captured context
     """
-    if config and config.get('DEBUG'):
-        print(f"♣ Processing exception: {type(error).__name__}")
-        print(f"♣ Error message: {str(error)}")
 
     # Reset/initialize important variables
     caller_frame = None
@@ -224,28 +221,21 @@ def handle_exception(
                     for k, v in inspect.getcallargs(func, *(args or []), **(kwargs or {})).items()
                 }
 
+                source_verification = 'PASSED' if func.__name__ in source_code else 'FAILED'
                 context['function_info'] = {
                     'name': func.__name__,
                     'qualname': func.__qualname__,
                     'module': func.__module__,
                     'filename': inspect.getfile(func),
-                    'line_number': start_line,
+                    'starting_line_number': start_line,
                     'source_code': source_code.strip(),
                     'signature': str(sig),
                     'source_lines': {
                         i + start_line: line.rstrip()
                         for i, line in enumerate(source_lines)
-                    }
+                    },
+                    'source_verification': source_verification
                 }
-                
-                if config.get('DEBUG'):
-                    print("\nFunction Source Information:")
-                    print(f"♣ Function: {func.__name__}")
-                    print(f"♣ Starting at line: {start_line}")
-                    print(f"♣ Source verification: {'PASSED' if func.__name__ in source_code else 'FAILED'}")
-                    print("♣ Source code:")
-                    for line_no, line in context['function_info']['source_lines'].items():
-                        print(f"  {line_no}: {line}")
 
             except Exception as source_error:
                 print(f"♣ Warning: Failed to capture source code: {str(source_error)}")

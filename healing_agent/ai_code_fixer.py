@@ -158,9 +158,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         
         # Validate the fixed code
         if validate_fixed_code(fixed_code):
-            if config.get('DEBUG', False):
-                print("♣ Successfully generated fixed code")
-                print(f"♣ Fixed code: {fixed_code}")
+
             return fixed_code
         else:
             print("♣ Generated fix failed validation")

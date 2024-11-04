@@ -17,9 +17,9 @@ def divide_numbers(a=None, b=None):
     print(f'Attempting to divide {a} by {b}')
     try:
         result = a / b
-    except ZeroDivisionError:
-        print('Error: Attempted to divide by zero. Setting result to None.')
-        result = None
+    except ZeroDivisionError as e:
+        print(f'Error: {e}. Cannot divide by zero. Returning None.')
+        return None
     return result
 
 
@@ -43,9 +43,8 @@ def file_operations(filename='nonexistent_file.txt'):
             return f.read()
     except FileNotFoundError as e:
         print(
-            f'Error: {e.strerror} - {filename} not found. Please check the file path.'
+            f'Error: {e.strerror}. Please check if the file exists at the specified path: {filename}.'
             )
-        return None
 
 
 @healing_agent
@@ -61,11 +60,17 @@ def type_conversion(value=None):
 @healing_agent
 def key_error_example(key=None):
     """Deliberately tries to access a missing key in a dictionary"""
+    import random
     my_dict = {'a': 1, 'b': 2}
     if key is None:
         key = random.choice(['a', 'b', 'c'])
     print(f"Attempting to access key '{key}' in dictionary")
-    return my_dict[key]
+    try:
+        return my_dict[key]
+    except KeyError:
+        print(f"KeyError: The key '{key}' does not exist in the dictionary.")
+        print(f'Available keys are: {list(my_dict.keys())}')
+        return None
 
 
 @healing_agent
@@ -77,12 +82,11 @@ def index_error_example(index=None):
         index = random.randint(-10, 10)
     print(f"Attempting to access index {index} in string '{my_string}'")
     try:
-        if index < 0 or index >= len(my_string):
-            raise IndexError(
-                f"Index {index} is out of range for string '{my_string}'")
         return my_string[index]
     except IndexError as e:
-        print(f'Error: {e}')
+        print(
+            f'Error: {e}. Index {index} is out of range. Valid range is 0 to {len(my_string) - 1}.'
+            )
         return None
 
 
@@ -94,16 +98,14 @@ def attribute_error_example():
     class MyClass:
 
         def __init__(self):
-            self.attr = 'This is an attribute'
+            self.attr = None
     obj = MyClass()
-    print("Attempting to access attribute 'attr'")
+    print("Attempting to access 'attr'")
     try:
         return obj.attr
     except AttributeError as e:
-        print(f'AttributeError occurred: {e}.')
-        print(
-            f'Detailed Error Information: {e.args}, name: {e.name}, obj: {obj}'
-            )
+        print(f'AttributeError: {e.args[0]}')
+        print(f"Error details - Object: {obj}, Expected attribute: 'attr'")
 
 
 def main():

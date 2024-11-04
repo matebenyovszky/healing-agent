@@ -19,9 +19,11 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
             except Exception as e:
                 # Lazy load imports only when exception occurs
 
+                print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT STARTED {'✧'*25} ⚕️⚕️⚕️ ♣")
+                print(f"♣ ⚕️ Error caught: {type(e).__name__} - {str(e)}")
+
                 import inspect
                 import sys
-                import requests
                 import importlib.util
                 
                 # Load config only when an exception occurs
@@ -43,25 +45,29 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                 context['ai_hint'] = hint
                 
                 # Print detailed error information
-                print(f"♣ ⚕️  {'✧'*25} HEALING AGENT {'✧'*25} ⚕️  ♣")
-                print(f"♣ Error caught: {context['error']['type']} - {context['error']['message']}")
+
+
                 print(f"♣ In file: {context['error']['file']}, line {context['error']['line_number']}")
+                print(f"♣ Function name: {context['function_info']['name']}, starting line: {context['function_info']['starting_line_number']}")
+                print(f"♣ Error message: {context['error']['error_line']}")
                 print(f"♣ The Agent's hint: {hint}")
-                print(f"♣ ⚕️  {'✧'*25} HEALING AGENT {'✧'*25} ⚕️  ♣")
+
                 
                 # Add after context creation
                 if config.get('DEBUG'):
-                    print("\nDetailed Error Information:")
+                    print("\n♣ ⚕️ Detailed Error Information:")
                     print(f"♣ Error occurred in function: {context['error']['function_name']}")
                     print(f"♣ Error line: {context['error']['error_line']}")
-                    print(f"♣ Source verification: {'PASSED' if func.__name__ in context['function_info']['source_code'] else 'FAILED'}")
-                    print("♣ Source code:")
-                    for line_no, line in context['function_info']['source_lines'].items():
-                        print(f"  {line_no}: {line}")
+                    print(f"♣ Source verification: {context['function_info']['source_verification']}")
+                    if 'source_lines' in context['function_info']:
+                        print("♣ Source code captured successfully")
                 
                 # Fix the code
                 fixed_code = fix(context, config)
                 context['fixed_code'] = fixed_code
+
+                if config.get('DEBUG', False) and fixed_code:
+                    print("♣ Successfully generated fixed code")
 
                 # Save the exception details
                 if config.get('SAVE_EXCEPTIONS'):
@@ -138,7 +144,8 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                                 print(f"  • File: {getattr(module, '__file__', 'Unknown')}")
                                 print(f"  • Path: {getattr(module, '__path__', ['Unknown'])}")
                 
-                return None
+                print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT FINISHED {'✧'*25} ⚕️⚕️⚕️ ♣")
+                return
 
         return wrapper
     
