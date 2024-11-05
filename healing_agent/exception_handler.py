@@ -95,6 +95,53 @@ def handle_exception(
     # If we couldn't find the frame in the function, use the last frame
     if not error_frame:
         error_frame = trace[-1]
+
+    # Capture global and local variables from the error frame
+    if error_frame:
+        frame_obj = None
+        tb = exc_traceback
+        while tb:
+            if tb.tb_frame.f_code.co_filename == error_frame.filename and tb.tb_frame.f_lineno == error_frame.lineno:
+                frame_obj = tb.tb_frame
+                break
+            tb = tb.tb_next
+
+        if frame_obj:
+            # Capture local variables
+            local_vars = {}
+            for key, value in frame_obj.f_locals.items():
+                try:
+                    var_str = str(value)[:200]  # Limit to first 200 chars
+                    local_vars[key] = {
+                        'type': type(value).__name__,
+                        'value_preview': var_str
+                    }
+                except:
+                    local_vars[key] = {
+                        'type': type(value).__name__,
+                        'value_preview': '<Error converting to string>'
+                    }
+
+            # Capture global variables
+            global_vars = {}
+            for key, value in frame_obj.f_globals.items():
+                if not key.startswith('__'):  # Skip built-ins and private vars
+                    try:
+                        var_str = str(value)[:200]  # Limit to first 200 chars
+                        global_vars[key] = {
+                            'type': type(value).__name__,
+                            'value_preview': var_str
+                        }
+                    except:
+                        global_vars[key] = {
+                            'type': type(value).__name__,
+                            'value_preview': '<Error converting to string>'
+                        }
+
+            context['variables'] = {
+                'locals': local_vars,
+                'globals': global_vars
+            }
     
     # Enhanced error context with safe attribute access
     error_details = {

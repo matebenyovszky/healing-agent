@@ -5,8 +5,8 @@ ideas.md
 .ideas
 .initialprompt
 
-tests/healing_agent_exceptions
-tests/healing_agent_backups
+tests/_healing_agent_exceptions
+tests/_healing_agent_backups
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

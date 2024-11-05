@@ -1,41 +1,39 @@
 # Healing Agent 🩺
 
-Healing Agent is an intelligent code assistant that automatically detects and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and error-free code.
+Healer Agent is an intelligent code assistant that catches with detailed context and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and "self-healing" code.
 
-⚠️ Not intended for production use. Be extra careful with it, as although it could make backups of your code, it might not always do so correctly, and actually changes your code. ⚠️
+⚠️ Not intended for production use. Be extra careful with the optional AUTO_FIX function, as although it makes backups of your code, it actually changes and runs your code. ⚠️
 
-Goal: first autonomous actually usable coding agent in production (after Cursor AI)?
+Goal: first actually usable autonomous coding agent in production
 
 ## Features ✨
 
 - 🚨 Automatic error detection and handling of diverse exception types
-- 💡 Smart error analysis and solution suggestions
-- 🔍 Comprehensive error analysis including exception details, stack traces, variables and root cause identification
+- 💡 Smart error analysis and solution suggestions (auto-generated fixing hints and code)
+- 🔍 Comprehensive error analysis including exception details, stack traces, local and globalvariables and root cause identification
 - 🧠 Advanced AI-powered code healing using LLMs of different providers
-- 🔧 Zero-config integration with Python projects
+- 🔧 Zero-config integration with Python projects (just import and decorate)
 - 💾 Robust error tracking and debugging:
   - Exception context saved to JSON (code, error details, function info and args)
   - Automatic code backups before fixes
   - Detailed analysis results and fix history
   - Quick test of fixes
-- 🤖 Fully automated operation with minimal human intervention
+- 🤖 (Optionally) Fully automated operation with minimal human intervention
 
 ## How it works 🧠
+
 ```mermaid
 graph TD
     A[Import healing_agent] --> B[Configuration: AI access etc.]
     B --> C[Decorate functions with healing_agent]
     C --> D[Run Code / Execute Functions]
-    D --> E{Exception?}
-    E -->|Yes| F[Get and Save Detailed Context]
-    F --> G[Auto-generate Fixing hints and Code with AI]
+    D -->|No problem| L[Success]
+    D -->|Exception?| F[Get and Save Detailed Context]
+    F --> G[Auto-generate Fixing Hints and Code with AI]
     G --> H[Test Generated Code]
-    H --> I[Create backup - Optional]
+    H --> I[Create backup]
     I --> J[Apply Code Fixes]
     J --> D
-    E -->|No| M{Execution Complete?}
-    M -->|No| D
-    M -->|Yes| L[End]
 ```
 
 ## Installation 💻
@@ -91,13 +89,28 @@ To use Healing Agent in your project, follow these steps:
        # Your code here
    ```
 
-3. Run your Python script as usual. Healing Agent will automatically detect and attempt to fix any errors that occur within the decorated function.
+3. Run your Python script as usual. Healing Agent will automatically detect, save context and attempt to fix any errors that occur within the decorated function.
+
+Context (and code file backup in case of auto-fix) is saved to a JSON/Python file in the same directory as your script with actual timestamp in the filename.
 
 ## Configuration ⚙️
 
-Healing Agent is designed to be highly customizable. It leverages `healing_agent_config.py` to define the AI provider and its corresponding API keys. Upon initialization, Healing Agent automatically attempts to load the configuration from `healing_agent_config.py`. If this file does not exist, it defaults to the pre-defined configuration. Additionally, if `healing_agent_config.py` is missing, Healing Agent automatically creates configuration in the default user directory, ensuring a seamless setup process.
+Healing Agent provides extensive configuration options through the `healing_agent_config.py` file, which defines essential settings such as the AI provider and API credentials. The configuration system follows these principles:
 
-You have to configure AI provider and API keys. It supports OpenAI, Azure OpenAI and LiteLLM, Anthropic, and Ollama - however I have only tested Azure OpenAI yet.
+1. **Automatic Configuration Loading**: On startup, Healing Agent attempts to load settings from `healing_agent_config.py`
+2. **Fallback Mechanism**: If the configuration file is not found, the system falls back to pre-defined default settings
+3. **Auto-Configuration**: When no configuration file exists, Healing Agent automatically creates one in the default user directory
+
+### Supported AI Providers
+
+Healing Agent integrates with multiple AI providers - list could be extended:
+- OpenAI
+- Azure OpenAI
+- LiteLLM
+- Anthropic
+- Ollama
+
+**Note**: While multiple providers are supported, Azure OpenAI has been extensively tested. Support for other providers is under active development (feedback welcome).
 
 ## Testing 🧪
 
@@ -108,6 +121,6 @@ To test Healing Agent, you can use the `scripts/test_file_generator.py` script t
 - **Development**: Use Healing Agent during development to catch and fix errors early, and let AI generate fixes for your code. This is what you would do anyways, but now it's automated. 😁
 - **Educational Tool**: Use Healing Agent as a learning tool to understand AI coding capabilities and limitations.
 
-## License 📜
+## Cooking open source 🍳
 
-Healing Agent is distributed under the MIT License. See `LICENSE` for more information.
+Healing Agent is distributed under the MIT License. See `LICENSE` for more information. Feedback and contributions are welcome!
