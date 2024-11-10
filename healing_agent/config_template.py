@@ -6,6 +6,7 @@
 # AI Provider Configuration
 # -----------------------
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
+HEALING_AGENT_CONFIG_VERSION = "0.2.4"  
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration
@@ -36,7 +37,7 @@ ANTHROPIC = {
 # ------------------
 OLLAMA = {
     "host": "http://localhost:11434",  # Default Ollama host
-    "model": "llama2",  # or codellama, mistral etc.
+    "model": "llama3",  # or codellama, mistral etc.
     "timeout": 120  # Request timeout in seconds
 }
 
@@ -53,26 +54,17 @@ LITELLM = {
 MAX_ATTEMPTS = 3  # Maximum number of fix attempts
 DEBUG = True  # Enable detailed logging
 AUTO_FIX = True  # Automatically apply fixes without confirmation
+AUTO_SYSCHANGE = True  # Automatically apply system changes without confirmation
+
+# Healing Agent System Prompts
+# ---------------------------
+SYSTEM_PROMPTS = {
+    "code_fixer": "You are a Python code fixing assistant. Provide only the corrected code without explanations.",
+    "analyzer": "You are a Python error analysis assistant. Provide clear and concise explanation of the error and suggestions to fix it.",
+    "report": "You are a Python error reporting assistant. Provide a detailed report of the error, its cause, and the applied fix."
+}
 
 # Backup and Storage Configuration
 # -----------------------------
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
-
-# Validation
-def validate_config():
-    """Validate the configuration settings."""
-    if AI_PROVIDER not in ['azure', 'openai', 'ollama', 'litellm', 'anthropic']:
-        raise ValueError(f"Invalid AI provider: {AI_PROVIDER}")
-        
-    if AI_PROVIDER == 'azure' and (not AZURE['api_key'] or not AZURE['endpoint']):
-        raise ValueError("Azure API key and endpoint must be configured")
-        
-    if AI_PROVIDER == 'openai' and not OPENAI['api_key']:
-        raise ValueError("OpenAI API key must be configured")
-        
-    if AI_PROVIDER == 'anthropic' and not ANTHROPIC['api_key']:
-        raise ValueError("Anthropic API key must be configured")
-
-# Run validation on import
-validate_config()

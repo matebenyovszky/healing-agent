@@ -1,10 +1,4 @@
-# Try both import variations
-try:
-    import healing_agent
-    print("Found healing_agent as module")
-except ImportError as e:
-    print(f"Cannot import healing_agent directly: {e}")
-
+import healing_agent
 import random
 
 @healing_agent
@@ -17,7 +11,7 @@ def divide_numbers(a=None, b=None):
     print(f"Attempting to divide {a} by {b}")
     return a / b
 
-@healing_agent 
+@healing_agent
 def access_list(index=None):
     """Deliberately tries to access an invalid list index"""
     my_list = [1, 2, 3]
