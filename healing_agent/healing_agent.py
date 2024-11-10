@@ -1,7 +1,7 @@
 from functools import wraps
 from typing import Callable, Any
 
-from .exception_handler import handle_exception
+from .exception_handler import capture_context
 from .ai_code_fixer import fix
 from .ai_hint_generator import generate_hint
 from .config_loader import load_config
@@ -32,12 +32,12 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                 config.update(local_config)
 
                 # Handle the exception
-                context = handle_exception(
-                    error=e,
+                context = capture_context(
                     func=func,
                     args=args,
                     kwargs=kwargs,
-                    config=config
+                    config=config,
+                    error=e
                 )
                 
                 # Generate AI hint for the exception
@@ -58,7 +58,6 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                     print("\n♣ ⚕️ Detailed Error Information:")
                     print(f"♣ Error occurred in function: {context['error']['function_name']}")
                     print(f"♣ Error line: {context['error']['error_line']}")
-                    print(f"♣ Source verification: {context['function_info']['source_verification']}")
                     if 'source_lines' in context['function_info']:
                         print("♣ Source code captured successfully")
                 

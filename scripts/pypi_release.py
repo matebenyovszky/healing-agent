@@ -1,7 +1,6 @@
 import os
 import sys
 import subprocess
-import shutil
 from pathlib import Path
 
 def install_package(package):
@@ -32,14 +31,21 @@ def check_and_install_prerequisites():
 
 def build_and_upload_to_pypi(use_test_pypi=True):
     """Build and upload package to PyPI or TestPyPI."""
-    # Get token from environment variable
-    token = os.getenv('TWINE_PASSWORD')
-     
-    if not token:
-        print("♣ Error: TWINE_PASSWORD environment variable must be set with your API token")
-        print("♣ Please set it using:")
-        print("  export TWINE_PASSWORD=your-api-token")
-        sys.exit(1)
+    # Get appropriate token from environment variable
+    if use_test_pypi:
+        token = os.getenv('PYPI_TEST_TOKEN')
+        if not token:
+            print("♣ Error: PYPI_TEST_TOKEN environment variable must be set with your TestPyPI API token")
+            print("♣ Please set it using:")
+            print("  export PYPI_TEST_TOKEN=your-test-api-token")
+            sys.exit(1)
+    else:
+        token = os.getenv('PYPI_PROD_TOKEN')
+        if not token:
+            print("♣ Error: PYPI_PROD_TOKEN environment variable must be set with your PyPI API token")
+            print("♣ Please set it using:")
+            print("  export PYPI_PROD_TOKEN=your-prod-api-token")
+            sys.exit(1)
 
     try:
         # Build the package
