@@ -3,7 +3,7 @@ config.py
 ideas.md
 .tokens
 .ideas
-.initialprompt
+.initial_prompt
 
 tests/_healing_agent_exceptions
 tests/_healing_agent_backups

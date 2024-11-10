@@ -1,8 +1,8 @@
+# Experimental and not used.
+
 import json
 from typing import Any, Dict
-from .ai_code_fixer import get_ai_response
-
-## Experimental and not used. Probably a better approach would be the JSON with AI / linter and give feedback accordingly.
+from ..ai_code_fixer import get_ai_response
 
 def fix_json_ai(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
     """
