@@ -11,8 +11,8 @@ AI_PROVIDER = "azure"
 # Azure OpenAI Configuration
 # ------------------------
 AZURE = {
-    "api_key": "XXX",
-    "endpoint": "https://XXX.openai.azure.com",
+    "api_key": "f484cfe7823a4de9860e9badb016e28e",
+    "endpoint": "https://sandbox-ai-swedencentral.openai.azure.com",
     "deployment_name": "gpt-4o-mini",
     "api_version": "2024-02-01"
 }
@@ -54,25 +54,15 @@ MAX_ATTEMPTS = 3  # Maximum number of fix attempts
 DEBUG = True  # Enable detailed logging
 AUTO_FIX = True  # Automatically apply fixes without confirmation
 
+# Healing Agent System Prompts
+# ---------------------------
+SYSTEM_PROMPTS = {
+    "code_fixer": "You are a Python code fixing assistant. Provide only the corrected code without explanations.",
+    "analyzer": "You are a Python error analysis assistant. Provide clear and concise explanation of the error and suggestions to fix it.",
+    "report": "You are a Python error reporting assistant. Provide a detailed report of the error, its cause, and the applied fix."
+}
+
 # Backup and Storage Configuration
 # -----------------------------
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
-
-# Validation
-def validate_config():
-    """Validate the configuration settings."""
-    if AI_PROVIDER not in ['azure', 'openai', 'ollama', 'litellm', 'anthropic']:
-        raise ValueError(f"Invalid AI provider: {AI_PROVIDER}")
-        
-    if AI_PROVIDER == 'azure' and (not AZURE['api_key'] or not AZURE['endpoint']):
-        raise ValueError("Azure API key and endpoint must be configured")
-        
-    if AI_PROVIDER == 'openai' and not OPENAI['api_key']:
-        raise ValueError("OpenAI API key must be configured")
-        
-    if AI_PROVIDER == 'anthropic' and not ANTHROPIC['api_key']:
-        raise ValueError("Anthropic API key must be configured")
-
-# Run validation on import
-validate_config()

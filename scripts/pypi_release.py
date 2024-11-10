@@ -82,7 +82,7 @@ if __name__ == "__main__":
     print("="*60)
     
     # Get target from command line argument
-    use_test_pypi = True  # Default to TestPyPI
+    use_test_pypi = False  # Default to TestPyPI
     if len(sys.argv) > 1 and sys.argv[1].lower() == "prod":
         use_test_pypi = False
     

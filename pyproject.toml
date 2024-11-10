@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "healing_agent"
-version = "0.2.4"
+version = "0.2.5"
 authors = [
     { name = "Máté Benyovszky", email = "benyovszky.mate.work@outlook.com" },
 ]
@@ -22,7 +22,8 @@ keywords = [
     "openai",
     "exception-handling",
     "code-healing",
-    "bug-fixing"
+    "bug-fixing",
+    "agent"
 ]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -33,6 +34,7 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Topic :: Software Development :: Debuggers",
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Software Development :: Quality Assurance",
