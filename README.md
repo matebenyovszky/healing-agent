@@ -1,10 +1,12 @@
 # Healing Agent 🩺
 
-Healer Agent is an intelligent code assistant that catches with detailed context and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and "self-healing" code.
+Healer Agent is an intelligent code assistant that catches with detailed context and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and "self-healing" code. Your program will be able to fix itself, it will have regenerative healing abilities like [Wolverine](https://github.com/biobootloader/wolverine). 
 
 ⚠️ Not intended for production use. Be extra careful with the optional AUTO_FIX function, as although it makes backups of your code, it actually changes and runs your code. ⚠️
 
 Goal: first actually usable autonomous coding agent in production
+
+[Video demo on Youtube](https://youtu.be/_N1G3qBO34s)
 
 ## Features ✨
 
