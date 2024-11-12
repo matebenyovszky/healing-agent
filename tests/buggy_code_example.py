@@ -1,8 +1,4 @@
-try:
-    import healing_agent
-    print('Found healing_agent as module')
-except ImportError as e:
-    print(f'Cannot import healing_agent directly: {e}')
+import healing_agent
 import random
 
 
@@ -12,16 +8,16 @@ def divide_numbers(a=None, b=None):
     import random
     if a is None:
         a = random.randint(1, 10)
-    if b is None or b == 0:
+    if b is None:
         b = random.randint(1, 2)
     print(f'Attempting to divide {a} by {b}')
     try:
         result = a / b
-    except ZeroDivisionError:
-        print('Error: division by zero encountered.')
+    except ZeroDivisionError as e:
+        print(f'Error: {e}. Division by zero is not allowed. Returning None.')
         return None
     except Exception as e:
-        print(f'Unexpected error occurred: {e}')
+        print(f'Unexpected error: {e}. Returning None.')
         return None
     return result
 
@@ -29,12 +25,19 @@ def divide_numbers(a=None, b=None):
 @healing_agent
 def access_list(index=None):
     """Deliberately tries to access an invalid list index"""
+    import random
     my_list = [1, 2, 3]
     if index is None:
-        index = random.randint(0, 5)
+        index = random.randint(0, len(my_list) - 1)
     print(
         f'Attempting to access index {index} in list of length {len(my_list)}')
-    return my_list[index]
+    try:
+        return my_list[index]
+    except IndexError as e:
+        print(
+            f'Error: {e}. The index {index} is out of range for the list of length {len(my_list)}.'
+            )
+        return None
 
 
 @healing_agent
@@ -45,7 +48,10 @@ def file_operations(filename='nonexistent_file.txt'):
         with open(filename, 'r') as f:
             return f.read()
     except FileNotFoundError as e:
-        print(f'Error: {e.strerror}. The file "{filename}" does not exist.')
+        print(f'Error: {e.strerror} - {filename} not found.')
+        return None
+    except Exception as e:
+        print(f'An unexpected error occurred: {e}')
         return None
 
 
@@ -62,33 +68,21 @@ def type_conversion(value=None):
 @healing_agent
 def key_error_example(key=None):
     """Deliberately tries to access a missing key in a dictionary"""
-    import random
     my_dict = {'a': 1, 'b': 2}
     if key is None:
         key = random.choice(['a', 'b', 'c'])
     print(f"Attempting to access key '{key}' in dictionary")
-    try:
-        return my_dict[key]
-    except KeyError as e:
-        print(
-            f"KeyError: '{e.args[0]}' does not exist in the dictionary. Available keys: {list(my_dict.keys())}"
-            )
-        return None
+    return my_dict[key]
 
 
 @healing_agent
 def index_error_example(index=None):
     """Deliberately tries to access an invalid index in a string"""
-    import random
     my_string = 'hello'
     if index is None:
         index = random.randint(-10, 10)
     print(f"Attempting to access index {index} in string '{my_string}'")
-    try:
-        return my_string[index]
-    except IndexError as e:
-        print(f'Error: {e}. Valid index range is 0 to {len(my_string) - 1}.')
-        return None
+    return my_string[index]
 
 
 @healing_agent
@@ -97,15 +91,17 @@ def attribute_error_example():
 
 
     class MyClass:
-        pass
+
+        def __init__(self):
+            self.attr = None
     obj = MyClass()
-    print("Attempting to access non-existent attribute 'attr'")
     try:
+        print("Attempting to access non-existent attribute 'attr'")
         return obj.attr
     except AttributeError as e:
         print(f'Error: {e}')
-        print(f"Details: Attempted to access 'attr' on {obj}")
-        return None
+        print(f'Detailed Error Information: {e.args}')
+        print(f'Object state: {obj}')
 
 
 def main():

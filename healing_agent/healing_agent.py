@@ -1,13 +1,14 @@
 from functools import wraps
 from typing import Callable, Any
 
-from .exception_handler import handle_exception
+from .exception_handler import capture_context
 from .ai_code_fixer import fix
 from .ai_hint_generator import generate_hint
 from .config_loader import load_config
 from .code_backup import create_backup
 from .code_replacer import function_replacer
 from .exception_saver import save_context
+from .agent_tools.tool_install_missing_module import install_missing_module
 
 def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -19,25 +20,26 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
             except Exception as e:
                 # Lazy load imports only when exception occurs
 
+                print("\n")
                 print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT STARTED {'✧'*25} ⚕️⚕️⚕️ ♣")
-                print(f"♣ ⚕️ Error caught: {type(e).__name__} - {str(e)}")
+                print(f"♣ ⚕️  Error caught: {type(e).__name__} - {str(e)}")
 
                 import inspect
                 import sys
                 import importlib.util
                 
                 # Load config only when an exception occurs
-                config = load_config()
+                config, config_path = load_config()
                 # Merge local configuration overrides
                 config.update(local_config)
 
-                # Handle the exception
-                context = handle_exception(
-                    error=e,
+                # Continue with normal error handling
+                context = capture_context(
                     func=func,
                     args=args,
                     kwargs=kwargs,
-                    config=config
+                    config=config,
+                    error=e
                 )
                 
                 # Generate AI hint for the exception
@@ -55,10 +57,9 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                 
                 # Add after context creation
                 if config.get('DEBUG'):
-                    print("\n♣ ⚕️ Detailed Error Information:")
+                    print("\n♣ ⚕️  Detailed Error Information:")
                     print(f"♣ Error occurred in function: {context['error']['function_name']}")
                     print(f"♣ Error line: {context['error']['error_line']}")
-                    print(f"♣ Source verification: {context['function_info']['source_verification']}")
                     if 'source_lines' in context['function_info']:
                         print("♣ Source code captured successfully")
                 
@@ -75,6 +76,14 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
 
                     if config.get('DEBUG'):
                         print(f"♣ Exception details saved to: {saved_context}")
+
+                # Handle missing module errors before other processing
+                if isinstance(e, (ImportError, ModuleNotFoundError)):
+                    if config.get('AUTO_SYSCHANGE', False):
+                        if install_missing_module(str(e), config.get('DEBUG', False)):
+                            print(f"♣ Successfully installed missing module: {str(e)}")    
+                            # Retry the function after successful installation
+                            return func(*args, **kwargs)
 
                 if config.get('AUTO_FIX', True):
                     # Create backup before modifications
@@ -134,6 +143,8 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                             # Execute the updated function with original arguments
                             result = updated_func(*args, **kwargs)
                             print(f"♣ Fixed code executed with original arguments.")
+                            print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT FINISHED {'✧'*25} ⚕️⚕️⚕️  ♣")
+                            print("\n")
                             return result
                                 
                         except Exception as reload_error:
@@ -143,8 +154,9 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                                 print(f"  • Name: {module_name}")
                                 print(f"  • File: {getattr(module, '__file__', 'Unknown')}")
                                 print(f"  • Path: {getattr(module, '__path__', ['Unknown'])}")
-                
-                print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT FINISHED {'✧'*25} ⚕️⚕️⚕️ ♣")
+            
+                print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT FINISHED {'✧'*25} ⚕️⚕️⚕️  ♣")
+                print("\n")
                 return
 
         return wrapper

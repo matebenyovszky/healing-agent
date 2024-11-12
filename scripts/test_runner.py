@@ -2,7 +2,7 @@ import os
 import importlib.util
 import sys
 
-def run_tests():
+def execute_tests():
     """
     Runs all Python test files in the tests directory.
     Prints results and any errors encountered.
@@ -59,7 +59,7 @@ def run_tests():
 
 if __name__ == "__main__":
     try:
-        run_tests()
+        execute_tests()
         print("\n✓ All test suites completed")
     except Exception as e:
         print(f"\n✗ Test execution failed: {str(e)}")

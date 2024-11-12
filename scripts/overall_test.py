@@ -7,7 +7,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.append(str(project_root))
 
-from scripts.test_runner import run_tests as execute_tests
+from scripts.test_runner import execute_tests
 
 def install_package(package):
     """Install a Python package using pip."""
@@ -85,9 +85,9 @@ def check_configuration():
     """Check the configuration settings by running the configurator."""
     print("♣ Checking configuration...")
     try:
-        from healing_agent.configurator import setup_config
-        config_path = setup_config()
-        print(f"♣ Configuration settings are valid. Using config file at: {config_path}")
+        from healing_agent.config_loader import validate_config
+        validate_config()
+        print(f"♣ Configuration settings are valid.")
     except Exception as e:
         print(f"♣ Configuration error: {str(e)}")
         #print(f"♣ Error traceback: {traceback.format_exc()}")
