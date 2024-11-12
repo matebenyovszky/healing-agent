@@ -173,17 +173,22 @@ def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") 
     Returns:
         str: The AI generated response
     """
-    system_prompts = {
+    # system_prompts = config.get('SYSTEM_PROMPTS', {
+    #     "code_fixer": "You are a Python code fixing assistant. Provide only the corrected code without explanations.",
+    #     "analyzer": "You are a Python error analysis assistant. Provide clear and concise explanation of the error and suggestions to fix it.", 
+    #     "report": "You are a Python error reporting assistant. Provide a detailed report of the error, its cause, and the applied fix."
+    # })
+    
+    system_prompts = config['SYSTEM_PROMPTS'] if 'SYSTEM_PROMPTS' in config else {
         "code_fixer": "You are a Python code fixing assistant. Provide only the corrected code without explanations.",
-        "analyzer": "You are a Python error analysis assistant. Provide clear and concise explanation of the error and suggestions to fix it.",
+        "analyzer": "You are a Python error analysis assistant. Provide clear and concise explanation of the error and suggestions to fix it.", 
         "report": "You are a Python error reporting assistant. Provide a detailed report of the error, its cause, and the applied fix."
     }
     
     system_prompt = system_prompts.get(system_role, system_prompts["code_fixer"])
     
     try:
-        provider = config.get('AI_PROVIDER', 'azure').lower()
-        
+        provider = config['AI_PROVIDER'].lower() if 'AI_PROVIDER' in config else 'azure'
         if provider == 'azure':
             return _get_azure_response(prompt, config['AZURE'], system_prompt)
         elif provider == 'openai':
