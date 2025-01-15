@@ -9,16 +9,13 @@ def divide_numbers(a=None, b=None):
     if a is None:
         a = random.randint(1, 10)
     if b is None:
-        b = random.randint(1, 2)
+        b = random.randint(0, 2)
     print(f'Attempting to divide {a} by {b}')
     try:
         result = a / b
-    except ZeroDivisionError as e:
-        print(f'Error: {e}. Division by zero is not allowed. Returning None.')
-        return None
-    except Exception as e:
-        print(f'Unexpected error: {e}. Returning None.')
-        return None
+    except ZeroDivisionError:
+        print('Error: Division by zero encountered. Setting result to None.')
+        result = None
     return result
 
 
@@ -29,15 +26,13 @@ def access_list(index=None):
     my_list = [1, 2, 3]
     if index is None:
         index = random.randint(0, len(my_list) - 1)
-    print(
-        f'Attempting to access index {index} in list of length {len(my_list)}')
     try:
+        print(
+            f'Attempting to access index {index} in list of length {len(my_list)}'
+            )
         return my_list[index]
     except IndexError as e:
-        print(
-            f'Error: {e}. The index {index} is out of range for the list of length {len(my_list)}.'
-            )
-        return None
+        print(f'Error: {e}. Valid indices are from 0 to {len(my_list) - 1}.')
 
 
 @healing_agent
@@ -48,10 +43,10 @@ def file_operations(filename='nonexistent_file.txt'):
         with open(filename, 'r') as f:
             return f.read()
     except FileNotFoundError as e:
-        print(f'Error: {e.strerror} - {filename} not found.')
+        print(f'Error: {e.strerror} - {e.filename}')
         return None
     except Exception as e:
-        print(f'An unexpected error occurred: {e}')
+        print(f'An unexpected error occurred: {str(e)}')
         return None
 
 
@@ -93,15 +88,18 @@ def attribute_error_example():
     class MyClass:
 
         def __init__(self):
-            self.attr = None
+            self.attr = 'This is an existing attribute'
     obj = MyClass()
+    print("Attempting to access attribute 'attr'")
     try:
-        print("Attempting to access non-existent attribute 'attr'")
         return obj.attr
     except AttributeError as e:
-        print(f'Error: {e}')
+        print(f'AttributeError: {e}')
         print(f'Detailed Error Information: {e.args}')
-        print(f'Object state: {obj}')
+        print(f'Function Name: {attribute_error_example.__name__}')
+        print(
+            f'Function Signature: {attribute_error_example.__code__.co_varnames}'
+            )
 
 
 def main():
