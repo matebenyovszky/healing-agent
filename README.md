@@ -19,6 +19,7 @@ Goal: first actually usable autonomous coding agent in production
   - Detailed analysis results and fix history
   - Quick test of fixes
 - 🤖 (Optionally) Fully automated operation with minimal human intervention
+- 📦 Automatic installation of missing modules
 
 ## How it works 🧠
 
@@ -95,22 +96,62 @@ Context (and code file backup in case of auto-fix) is saved to a JSON/Python fil
 
 ## Configuration ⚙️
 
-Healing Agent provides extensive configuration options through the `healing_agent_config.py` file, which defines essential settings such as the AI provider and API credentials. The configuration system follows these principles:
+Healing Agent uses a flexible configuration system that supports multiple AI providers and customizable settings. The configuration is managed through a `healing_agent_config.py` file, which can be located in two places:
 
-1. **Automatic Configuration Loading**: On startup, Healing Agent attempts to load settings from `healing_agent_config.py`
-2. **Fallback Mechanism**: If the configuration file is not found, the system falls back to pre-defined default settings
-3. **Auto-Configuration**: When no configuration file exists, Healing Agent automatically creates one in the default user directory
+1. **Local Project Directory**: Healing Agent first checks for a config file in your project's directory
+2. **User Home Directory**: If no local config is found, it looks for `~/.healing_agent/healing_agent_config.py`
 
-### Supported AI Providers
+### Configuration File Creation
 
-Healing Agent integrates with multiple AI providers - list could be extended:
-- OpenAI
-- Azure OpenAI
-- LiteLLM
-- Anthropic
-- Ollama
+The configuration file is automatically created in one of two ways:
 
-**Note**: While multiple providers are supported, Azure OpenAI has been extensively tested. Support for other providers is under active development (feedback welcome).
+1. **Auto-Creation**: When you first run Healing Agent, if no configuration file exists, it will:
+   - Create a `.healing_agent` directory in your home folder
+   - Copy the template configuration to `~/.healing_agent/healing_agent_config.py`
+   - Print a message indicating where the new config file was created
+
+2. **Manual Creation**: You can manually create the configuration file:
+   - Copy `healing_agent/config_template.py` from the package
+   - Rename it to `healing_agent_config.py`
+   - Place it in either your project directory or `~/.healing_agent/`
+   - Update the AI provider settings and other options
+
+### Configuration Options
+
+The configuration file includes:
+
+1. **AI Provider Selection**: Choose from supported providers:
+   - OpenAI
+   - Azure OpenAI
+   - LiteLLM
+   - Anthropic
+   - Ollama
+
+2. **Provider Credentials**: Set up API keys and endpoints
+   - Can be defined directly in the config file
+   - Can be loaded from environment variables (recommended)
+
+3. **Behavior Settings**:
+   ```python
+   MAX_ATTEMPTS = 3      # Maximum fix attempts
+   DEBUG = True         # Enable detailed logging
+   AUTO_FIX = True     # Auto-apply fixes
+   BACKUP_ENABLED = True # Create backups before fixes
+   ```
+
+Example configuration for Azure OpenAI:
+```python
+AI_PROVIDER = "azure"
+
+AZURE = {
+    "api_key": os.getenv("AZURE_API_KEY"),  # Recommended: use environment variable
+    "endpoint": "https://your-resource.openai.azure.com",
+    "deployment_name": "gpt-4",
+    "api_version": "2024-02-01"
+}
+```
+
+**Note**: While multiple providers are supported, Azure OpenAI has been extensively tested. Support for other providers is under active development.
 
 ## Testing 🧪
 

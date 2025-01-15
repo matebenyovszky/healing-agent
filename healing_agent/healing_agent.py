@@ -9,6 +9,7 @@ from .code_backup import create_backup
 from .code_replacer import function_replacer
 from .exception_saver import save_context
 from .agent_tools.tool_install_missing_module import install_missing_module
+from .ai_fix_saver import save_ai_fix
 
 def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -23,6 +24,11 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                 print("\n")
                 print(f"♣ ⚕️⚕️⚕️  {'✧'*25} HEALING AGENT STARTED {'✧'*25} ⚕️⚕️⚕️ ♣")
                 print(f"♣ ⚕️  Error caught: {type(e).__name__} - {str(e)}")
+
+                # Reset context and config variables to ensure clean state
+                context = None
+                config = None 
+                config_path = None
 
                 import inspect
                 import sys
@@ -47,14 +53,11 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                 context['ai_hint'] = hint
                 
                 # Print detailed error information
-
-
                 print(f"♣ In file: {context['error']['file']}, line {context['error']['line_number']}")
                 print(f"♣ Function name: {context['function_info']['name']}, starting line: {context['function_info']['starting_line_number']}")
                 print(f"♣ Error message: {context['error']['error_line']}")
                 print(f"♣ The Agent's hint: {hint}")
 
-                
                 # Add after context creation
                 if config.get('DEBUG'):
                     print("\n♣ ⚕️  Detailed Error Information:")
@@ -69,6 +72,12 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
 
                 if config.get('DEBUG', False) and fixed_code:
                     print("♣ Successfully generated fixed code")
+
+                # Save the AI fix if enabled
+                if config.get('SAVE_AI_FIXES', True) and fixed_code:
+                    saved_fix = save_ai_fix(context)
+                    if config.get('DEBUG'):
+                        print(f"♣ AI fix saved to: {saved_fix}")
 
                 # Save the exception details
                 if config.get('SAVE_EXCEPTIONS'):

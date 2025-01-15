@@ -6,47 +6,49 @@
 # AI Provider Configuration
 # -----------------------
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
-HEALING_AGENT_CONFIG_VERSION = "0.2.4"  
+import os
+
+HEALING_AGENT_CONFIG_VERSION = "0.2.6"  
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration
 # ------------------------
 AZURE = {
-    "api_key": "XXX",
-    "endpoint": "https://XXX.openai.azure.com",
-    "deployment_name": "gpt-4o-mini",
+    "api_key": os.getenv("AZURE_OPENAI_API_KEY", "XXX"),
+    "endpoint": os.getenv("AZURE_OPENAI_ENDPOINT", "https://XXX.openai.azure.com"),
+    "deployment_name": os.getenv("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
     "api_version": "2024-02-01"
 }
 
 # OpenAI Direct Configuration  
 # -------------------------
 OPENAI = {
-    "api_key": "your-openai-key-here",
-    "model": "gpt-4",  # or gpt-3.5-turbo
-    "organization_id": None  # Optional
+    "api_key": os.getenv("OPENAI_API_KEY", "your-openai-key-here"),
+    "model": os.getenv("OPENAI_MODEL", "gpt-4"),  # or gpt-3.5-turbo
+    "organization_id": os.getenv("OPENAI_ORG_ID", None)  # Optional
 }
 
 # Anthropic Configuration
 # ---------------------
 ANTHROPIC = {
-    "api_key": "your-anthropic-key-here",
-    "model": "claude-2"  # or claude-instant-1
+    "api_key": os.getenv("ANTHROPIC_API_KEY", "your-anthropic-key-here"),
+    "model": os.getenv("ANTHROPIC_MODEL", "claude-2")  # or claude-instant-1
 }
 
 # Ollama Configuration
 # ------------------
 OLLAMA = {
-    "host": "http://localhost:11434",  # Default Ollama host
-    "model": "llama3",  # or codellama, mistral etc.
-    "timeout": 120  # Request timeout in seconds
+    "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),  # Default Ollama host
+    "model": os.getenv("OLLAMA_MODEL", "llama3"),  # or codellama, mistral etc.
+    "timeout": int(os.getenv("OLLAMA_TIMEOUT", "120"))  # Request timeout in seconds
 }
 
 # LiteLLM Configuration
 # -------------------
 LITELLM = {
-    "api_key": "your-litellm-key",  # If using hosted LiteLLM
-    "model": "gpt-4",  # Model identifier
-    "api_base": None  # Optional custom API base URL
+    "api_key": os.getenv("LITELLM_API_KEY", "your-litellm-key"),  # If using hosted LiteLLM
+    "model": os.getenv("LITELLM_MODEL", "gpt-4"),  # Model identifier
+    "api_base": os.getenv("LITELLM_API_BASE", None)  # Optional custom API base URL
 }
 
 # Healing Agent Behavior Configuration
@@ -68,3 +70,4 @@ SYSTEM_PROMPTS = {
 # -----------------------------
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
+SAVE_AI_FIXES = True  # New parameter to control saving AI code suggestions
