@@ -38,6 +38,7 @@ jobs:
         packages-dir: dist/
         verbose: true
         print-hash: true
+        skip-existing: true  # Skip if version exists
         
     # Publish to PyPI only on releases
     - name: Publish to PyPI
@@ -47,3 +48,4 @@ jobs:
         packages-dir: dist/
         verbose: true
         print-hash: true
+        skip-existing: true  # Skip if version exists
