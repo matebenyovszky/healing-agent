@@ -64,10 +64,15 @@ def load_config(local_config_path=None):
                 if os.getenv(env_var):
                     azure_config['api_key'] = os.getenv(env_var)
                     break
-                    
-        azure_config.setdefault('instance', os.getenv('AZURE_OPENAI_INSTANCE'))
-        azure_config.setdefault('api_version', os.getenv('AZURE_API_VERSION'))
-        azure_config.setdefault('api_base', os.getenv('AZURE_API_BASE'))
+
+        # Env fallbacks MUST use the same keys the AI broker reads:
+        # endpoint, deployment_name, api_version (see ai_broker._get_azure_response)
+        if not azure_config.get('endpoint'):
+            azure_config['endpoint'] = os.getenv('AZURE_OPENAI_ENDPOINT') or os.getenv('AZURE_API_BASE')
+        if not azure_config.get('deployment_name'):
+            azure_config['deployment_name'] = os.getenv('AZURE_OPENAI_DEPLOYMENT')
+        if not azure_config.get('api_version'):
+            azure_config['api_version'] = os.getenv('AZURE_API_VERSION') or os.getenv('AZURE_OPENAI_API_VERSION')
 
     # Check Anthropic config
     if 'ANTHROPIC' in config_vars:

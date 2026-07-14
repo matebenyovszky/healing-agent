@@ -93,21 +93,24 @@ def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
         raise
 
 @handle_connection_errors("Anthropic")
-def _get_anthropic_response(prompt: str, config: Dict) -> str:
+def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle Anthropic API requests"""
     import anthropic
     client = anthropic.Anthropic(api_key=config['api_key'])
-    
+
     try:
-        response = client.messages.create(
-            model=config['model'],
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }],
-            timeout=config.get('timeout', 30)
-        )
+        request_kwargs = {
+            "model": config.get('model', 'claude-sonnet-5'),
+            "max_tokens": int(config.get('max_tokens') or 1024),
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": prompt}],
+            "timeout": config.get('timeout', 30)
+        }
+        # Only pass temperature if explicitly configured (else use SDK default)
+        if config.get('temperature') is not None:
+            request_kwargs["temperature"] = float(config['temperature'])
+
+        response = client.messages.create(**request_kwargs)
         return response.content[0].text
     except Exception as e:
         print(f"♣ Anthropic API error: {str(e)}")
@@ -194,7 +197,7 @@ def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") 
         elif provider == 'openai':
             return _get_openai_response(prompt, config['OPENAI'], system_prompt)
         elif provider == 'anthropic':
-            return _get_anthropic_response(prompt, config['ANTHROPIC'])
+            return _get_anthropic_response(prompt, config['ANTHROPIC'], system_prompt)
         elif provider == 'ollama':
             return _get_ollama_response(prompt, config['OLLAMA'])
         elif provider == 'litellm':

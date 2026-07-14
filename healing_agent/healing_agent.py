@@ -10,6 +10,7 @@ from .code_replacer import function_replacer
 from .exception_saver import save_context
 from .agent_tools.tool_install_missing_module import install_missing_module
 from .ai_fix_saver import save_ai_fix
+from .redactor import redact
 
 def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[..., Any]:
     def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -47,7 +48,14 @@ def healing_agent(func: Callable[..., Any] = None, **local_config) -> Callable[.
                     config=config,
                     error=e
                 )
-                
+
+                # Redact secrets (credentials, tokens, auth headers, etc.) from
+                # the captured context BEFORE it is sent to the AI provider or
+                # written to disk. Single chokepoint for both leak surfaces.
+                context = redact(context, config)
+                if config.get('DEBUG'):
+                    print("♣ Context redacted for secrets before AI/disk usage")
+
                 # Generate AI hint for the exception
                 hint = generate_hint(context, config)
                 context['ai_hint'] = hint

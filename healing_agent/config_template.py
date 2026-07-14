@@ -32,7 +32,9 @@ OPENAI = {
 # ---------------------
 ANTHROPIC = {
     "api_key": os.getenv("ANTHROPIC_API_KEY", "your-anthropic-key-here"),
-    "model": os.getenv("ANTHROPIC_MODEL", "claude-2")  # or claude-instant-1
+    "model": os.getenv("ANTHROPIC_MODEL", "claude-sonnet-5"),  # e.g. claude-sonnet-5, claude-haiku-4-5
+    "max_tokens": int(os.getenv("ANTHROPIC_MAX_TOKENS", "1024")),
+    "temperature": float(os.getenv("ANTHROPIC_TEMPERATURE", "1.0"))
 }
 
 # Ollama Configuration
@@ -71,3 +73,14 @@ SYSTEM_PROMPTS = {
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
 SAVE_AI_FIXES = True  # New parameter to control saving AI code suggestions
+
+# Secret Redaction Configuration
+# -----------------------------
+# Captured context (variables, arguments, headers, exception attributes) is
+# written to disk and sent to the AI provider. Name-based redaction replaces
+# the value of any field whose NAME looks sensitive before that happens.
+REDACT_SECRETS = True  # Master switch for secret redaction (strongly recommended: True)
+REDACT_PLACEHOLDER = "<redacted>"  # Replacement text for redacted values
+# Extra case-insensitive regex/substring patterns to treat as sensitive field
+# names, on top of the built-in defaults (password, token, api_key, auth, ...).
+REDACT_EXTRA_PATTERNS = []  # e.g. ["adószám", "taj", "customer[-_ ]?id"]

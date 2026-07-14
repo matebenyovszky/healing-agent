@@ -7,6 +7,18 @@ import ast
 from typing import Optional, Any, Dict, Callable
 import requests
 
+from .redactor import get_sensitive_matcher, is_sensitive_name, DEFAULT_PLACEHOLDER
+
+# Healing-agent's own wrapper-frame variables. In production, capture_context
+# runs inside the decorator wrapper, so its caller frame holds these internals
+# rather than the user's own state. `config` carries the provider API keys and
+# `args`/`kwargs` duplicate (un-redacted) the user's call arguments, so they are
+# never worth capturing and must never be serialized/sent.
+_INTERNAL_SKIP_VARS = {
+    'config', 'config_path', 'local_config', 'args', 'kwargs',
+    'local_vars', 'global_vars', 'context',
+}
+
 def safe_str(obj: Any) -> str:
     """
     Safely convert any object to a string representation.
@@ -123,36 +135,34 @@ def capture_context(
     # Capture frame information
     frame = inspect.currentframe().f_back
     if frame:
-        # Capture local variables
-        local_vars = {}
-        for key, value in frame.f_locals.items():
+        # Matcher for name-based secret redaction of variable previews.
+        _matcher = get_sensitive_matcher(config)
+
+        def _preview(key, value):
+            """Build a {type, value_preview} entry, redacting sensitive names."""
+            type_name = type(value).__name__
+            if is_sensitive_name(key, _matcher):
+                return {'type': type_name, 'value_preview': DEFAULT_PLACEHOLDER}
             try:
                 var_str = str(value)[:200]
-                local_vars[key] = {
-                    'type': type(value).__name__,
-                    'value_preview': var_str
-                }
-            except:
-                local_vars[key] = {
-                    'type': type(value).__name__,
-                    'value_preview': '<Error converting to string>'
-                }
+            except Exception:
+                var_str = '<Error converting to string>'
+            return {'type': type_name, 'value_preview': var_str}
 
-        # Capture global variables
-        global_vars = {}
-        for key, value in frame.f_globals.items():
-            if not key.startswith('__'):  # Skip built-ins and private vars
-                try:
-                    var_str = str(value)[:200]  # Limit to first 200 chars
-                    global_vars[key] = {
-                        'type': type(value).__name__,
-                        'value_preview': var_str
-                    }
-                except:
-                    global_vars[key] = {
-                        'type': type(value).__name__,
-                        'value_preview': '<Error converting to string>'
-                    }
+        # Capture local variables (skip healing-agent internals that carry
+        # credentials or duplicate the user's arguments).
+        local_vars = {
+            key: _preview(key, value)
+            for key, value in frame.f_locals.items()
+            if key not in _INTERNAL_SKIP_VARS
+        }
+
+        # Capture global variables (skip built-ins/private and internals).
+        global_vars = {
+            key: _preview(key, value)
+            for key, value in frame.f_globals.items()
+            if not key.startswith('__') and key not in _INTERNAL_SKIP_VARS
+        }
 
         context['variables'] = {
             'locals': local_vars,

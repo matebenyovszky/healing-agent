@@ -1,0 +1,30 @@
+# Local pre-commit hooks to stop credentials being committed.
+# Install once per clone:
+#     pip install pre-commit
+#     pre-commit install
+#
+# Then every `git commit` is scanned automatically.
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: detect-private-key
+      - id: check-added-large-files
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      # Belt-and-suspenders: never commit an actual credential-bearing config,
+      # regardless of where it lives in the tree.
+      - id: forbid-healing-agent-config
+        name: Do not commit healing_agent_config.py (contains credentials)
+        entry: healing_agent_config.py must never be committed; use config_template.py and env vars.
+        language: fail
+        files: (^|/)healing_agent_config\.py$

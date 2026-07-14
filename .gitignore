@@ -1,9 +1,17 @@
 config.py
+# Never commit the actual credential-bearing config, wherever it lives
+healing_agent_config.py
+**/healing_agent_config.py
 *.json
 ideas.md
 .tokens
+*.tokens
 .ideas
 .initial_prompt
+# Healing-agent runtime artifacts (may contain captured variable values / secrets)
+**/_healing_agent_exceptions/
+**/_healing_agent_backups/
+**/_healing_agent_fixes/
 
 tests/_healing_agent_exceptions
 tests/_healing_agent_backups
