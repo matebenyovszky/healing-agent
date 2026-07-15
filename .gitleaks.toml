@@ -1,0 +1,14 @@
+# gitleaks configuration for healing-agent.
+# Extends the built-in default ruleset and allowlists known test fixtures that
+# intentionally contain FAKE sample secrets (used to test redaction).
+
+title = "healing-agent gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Test fixtures containing fake/sample secrets for redaction tests"
+paths = [
+    '''tests/test_redactor\.py''',
+]
