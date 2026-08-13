@@ -11,7 +11,7 @@ from .code_replacer import function_replacer
 from .config_loader import load_config
 from .exception_handler import capture_context
 from .exception_saver import save_context
-from .git_patch_saver import save_git_patch
+from .git_patch_saver import apply_git_patch, save_git_patch
 from .redactor import redact
 
 
@@ -158,7 +158,13 @@ def _attempt_healing(
         if config.get("DEBUG"):
             print(f"♣ AI fix saved to: {saved_fix}")
 
-    if config.get("SAVE_GIT_PATCHES", False) and fixed_code:
+    git_mode = config.get("GIT_MODE", "off")
+    if config.get("SAVE_GIT_PATCHES", False) and git_mode == "off":
+        # Preserve the 0.2.8 flag while making the richer mode explicit.
+        git_mode = "patch"
+
+    if git_mode != "off" and fixed_code:
+        context["git_patch_dir"] = config.get("GIT_PATCH_DIR")
         saved_patch = save_git_patch(context)
         context["git_patch_path"] = saved_patch
         if config.get("DEBUG"):
@@ -189,7 +195,19 @@ def _attempt_healing(
         print(f"♣ Attempting to update file: {context['error']['file']}")
         print(f"♣ Replacing function: {context['error']['function_name']}")
 
-    if not function_replacer(context, fixed_code):
+    if git_mode == "apply":
+        if not context.get("git_patch_path"):
+            print("♣ Git patch was not generated or did not pass git apply --check.")
+            return False, None
+        try:
+            apply_git_patch(
+                context["git_patch_path"],
+                stage=bool(config.get("GIT_STAGE", False)),
+            )
+        except Exception as git_error:
+            print(f"♣ Git refused the candidate patch: {git_error}")
+            return False, None
+    elif not function_replacer(context, fixed_code):
         print("♣ Generated fix could not be applied.")
         return False, None
 

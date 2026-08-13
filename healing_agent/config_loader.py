@@ -136,9 +136,14 @@ def validate_config(config):
             if not isinstance(config.get(bool_setting), bool):
                 raise ValueError(f"{bool_setting} must be a boolean value")
 
-        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES']:
+        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES', 'GIT_STAGE']:
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
+
+        if config.get('GIT_MODE', 'off') not in {'off', 'patch', 'apply'}:
+            raise ValueError("GIT_MODE must be one of: off, patch, apply")
+        if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):
+            raise ValueError("GIT_PATCH_DIR must be a path string or None")
     
         return config
         

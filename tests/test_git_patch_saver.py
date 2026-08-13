@@ -3,7 +3,12 @@ import importlib.util
 import subprocess
 
 from healing_agent.code_replacer import build_replacement_source
-from healing_agent.git_patch_saver import save_git_patch
+from healing_agent.git_patch_saver import (
+    GitPatchError,
+    apply_git_patch,
+    save_git_patch,
+    save_text_patch,
+)
 
 
 def _context(source_path: Path) -> dict:
@@ -74,6 +79,61 @@ def test_save_git_patch_creates_git_apply_compatible_artifact(tmp_path):
     assert check.returncode == 0, check.stderr
 
 
+def test_text_patch_supports_powershell_without_python_ast(tmp_path):
+    repo = tmp_path / "repo"
+    (repo / ".git").mkdir(parents=True)
+    script = repo / "scripts" / "import.ps1"
+    script.parent.mkdir()
+    original = 'param([string]$Path)\n$data = Import-Csv $Path\n$data\n'
+    candidate = 'param([string]$Path)\n$data = Import-Csv -LiteralPath $Path\n$data\n'
+    script.write_text(original, encoding="utf-8")
+
+    artifact = save_text_patch(
+        script,
+        original,
+        candidate,
+        language="powershell",
+    )
+
+    assert artifact.verified is True
+    assert artifact.relative_path == "scripts/import.ps1"
+    assert artifact.metadata_path.exists()
+    assert "Import-Csv -LiteralPath" in artifact.patch_path.read_text(encoding="utf-8")
+
+
+def test_apply_git_patch_checks_base_and_updates_file(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
+    script = repo / "run.sh"
+    original = "#!/bin/sh\necho old\n"
+    candidate = "#!/bin/sh\necho new\n"
+    script.write_text(original, encoding="utf-8")
+
+    artifact = save_text_patch(script, original, candidate, language="shell")
+    assert apply_git_patch(artifact.patch_path) is True
+    assert script.read_text(encoding="utf-8") == candidate
+
+
+def test_apply_git_patch_refuses_changed_source(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, capture_output=True, check=True)
+    script = repo / "run.js"
+    original = "console.log('old');\n"
+    candidate = "console.log('new');\n"
+    script.write_text(original, encoding="utf-8")
+    artifact = save_text_patch(script, original, candidate, language="javascript")
+    script.write_text("console.log('unrelated change');\n", encoding="utf-8")
+
+    try:
+        apply_git_patch(artifact.patch_path)
+    except GitPatchError as error:
+        assert "base" in str(error)
+    else:
+        raise AssertionError("a patch must not overwrite a changed source file")
+
+
 def test_new_configuration_keeps_automatic_fixing_as_default():
     template_path = (
         Path(__file__).parents[1] / "healing_agent" / "config_template.py"
@@ -86,3 +146,4 @@ def test_new_configuration_keeps_automatic_fixing_as_default():
     assert config_template.AUTO_FIX is True
     assert config_template.AUTO_SYSCHANGE is False
     assert config_template.SAVE_GIT_PATCHES is False
+    assert config_template.GIT_MODE == "off"

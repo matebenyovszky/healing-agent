@@ -47,7 +47,7 @@ relax the canonical model, invent required values, or overwrite the original
 document. Shadow mode and human approval will be available as optional policies
 alongside the default automatic activation path.
 
-This capability is planned, not implemented in 0.2.8. See the dedicated
+This capability is planned, not implemented in 0.2.9. See the dedicated
 [Data Healing roadmap](ROADMAP.md#flagship-data-healing) for incremental steps.
 
 Data Healing is intentionally framework-level. The core package does not
@@ -181,6 +181,9 @@ The configuration file includes:
    AUTO_SYSCHANGE = False   # Never install packages automatically by default
    BACKUP_ENABLED = True    # Create backups before fixes
    SAVE_GIT_PATCHES = False # Optionally save a reviewable unified diff
+   GIT_MODE = "off"          # "off", "patch", or guarded "apply"
+   GIT_PATCH_DIR = None       # Optional patch/provenance directory
+   GIT_STAGE = False          # Stage only when GIT_MODE="apply"
    ```
 
 `MAX_ATTEMPTS` counts repair cycles for the same decorated function, including
@@ -196,16 +199,32 @@ and use version control so source changes remain recoverable.
 
 ### Reviewable Git patches
 
-Set `SAVE_GIT_PATCHES=True` to save each valid generated replacement as a
-minimal unified diff under `_healing_agent_fixes/`. The artifact uses Git paths
-and can be reviewed or applied with `git apply <file.patch>`.
+Git is optional. The core decorator works without a repository and never
+commits, pushes, or needs a GitHub token. Set `GIT_MODE="patch"` to save each
+valid generated replacement as a minimal unified diff plus a JSON provenance
+sidecar under `_healing_agent_fixes/`. The artifact records the repository
+root, relative path, source hashes, Git HEAD, language, and verification state.
+It can be reviewed or checked with `git apply --check <file.patch>`.
+
+`SAVE_GIT_PATCHES=True` remains a backwards-compatible alias for
+`GIT_MODE="patch"`. For a locally guarded application, use
+`GIT_MODE="apply"`; Healing Agent first checks the patch, confirms that the
+source hash is unchanged, and then runs `git apply`. It never commits or pushes
+automatically. `GIT_STAGE=True` may be used to stage the applied file, but is
+off by default.
+
+The patch layer is text- and language-neutral. Python uses the decorator's AST
+replacement adapter; a PowerShell, JavaScript, shell, or other adapter can call
+`save_text_patch(path, original_source, candidate_source, language="powershell")`
+and receive the same diff, metadata, hash check, and apply behavior. The
+decorator itself remains Python-only until language adapters are added.
 
 Patch generation is independent of `AUTO_FIX`: with the default
 `AUTO_FIX=True`, it is an audit artifact for the automatically applied
 candidate; with `AUTO_FIX=False`, it is a proposal that leaves the source file
-unchanged. In 0.2.8 this does not create commits, push branches, or open pull
-requests, and a generated patch is not evidence that tests passed. Isolated
-verification and optional draft-PR publication remain 0.3 milestones.
+unchanged. A generated patch is not evidence that tests passed: the JSON
+sidecar records patch verification separately from test evidence. Commits,
+branches, pushes, and draft-PR publication remain explicit host-level steps.
 
 ### Automatic system changes
 
@@ -233,7 +252,7 @@ The model name is configurable and is not restricted to a hard-coded list. The O
 Anthropic and LiteLLM support are optional extras (`pip install
 "healing-agent[anthropic]"` or `pip install "healing-agent[litellm]"`). The
 current LiteLLM extra requires Python 3.10 or newer; the package supports
-Python 3.10–3.13. The 0.2.8 dependency baselines are OpenAI 2.20.0,
+Python 3.10–3.13. The 0.2.9 dependency baselines are OpenAI 2.20.0,
 Anthropic 0.121.0, LiteLLM 1.96.2, HTTPX 0.28.1, and Requests 2.34.2, with
 compatible updates allowed inside the declared major range. A normal install
 currently resolves to OpenAI 3.0.0. LiteLLM 1.96.2 requires OpenAI
@@ -256,7 +275,10 @@ creating a version tag or publishing to PyPI.
 
 ## Roadmap 🗺️
 
-See [ROADMAP.md](ROADMAP.md) for small release steps toward verified repair, LLM and agent failure recovery, harness integrations such as Hermes Agent, and a language-neutral repair coordinator.
+See [ROADMAP.md](ROADMAP.md) and the [Data Healing design](docs/data-healing.md)
+for small release steps toward verified repair, LLM and agent failure recovery,
+harness integrations such as Hermes Agent, and a language-neutral repair
+coordinator.
 
 Healing Agent can emit a local, reviewable Git patch, but does not currently
 create commits, push branches, or connect runtime failures to GitHub issues and
@@ -270,7 +292,7 @@ repository permissions such as `contents:write` and `pull_requests:write`
 not proof that a fix is safe: the integration must apply the patch on an
 isolated branch, run `git apply --check`, execute configured tests, commit and
 push only after policy approval, and then open a draft PR. That flow is planned
-for the roadmap; `0.2.8` only creates the local patch artifact.
+for the roadmap; 0.2.9 provides the local guarded patch workflow.
 
 ## Use Cases 💡
 

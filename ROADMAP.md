@@ -40,19 +40,29 @@ retaining page, table, cell, and bounding-box provenance.
 - [x] Publish 0.2.7 to TestPyPI and run an install smoke test.
 - [x] Tag `v0.2.7`, create release notes, then publish to PyPI.
 
-## Next release: 0.2.8 — reviewable patch bridge
+## Released: 0.2.8 — reviewable patch bridge
 
 - [x] Restore `AUTO_FIX=True` as the default while keeping `AUTO_SYSCHANGE=False`.
 - [x] Generate a minimal candidate replacement without changing unrelated source formatting.
 - [x] Add optional `SAVE_GIT_PATCHES` artifacts consumable by `git apply`.
-- [ ] Attach verification evidence and explicit proposal/applied status to patch metadata.
-- [ ] Add a CLI command that verifies and applies a selected patch.
+- [x] Add language-neutral text patch support for PowerShell, shell, JavaScript, and other script adapters.
+- [x] Attach source hashes, repository path, Git HEAD, language, and patch verification to a JSON sidecar.
+- [x] Add guarded `GIT_MODE="apply"` and optional staging without automatic commit or push.
+
+## 0.2.9 — optional Git workflow and Data Healing specification
+
+- [x] Keep Git completely optional when `GIT_MODE="off"`.
+- [x] Verify a patch with `git apply --check` before any Git-mediated application.
+- [x] Refuse application when the source hash changed since proposal time.
+- [x] Document host-level branch/commit/push/draft-PR responsibilities separately from runtime repair.
+- [x] Turn the Data Healing concept into a dependency-free protocol and acceptance test.
 
 The patch artifact is the prerequisite for later branch, draft-PR, and GitHub
 approval integrations. It is not a prerequisite for Data Healing itself: data
 profiling, adapter generation, and replay can be developed locally first.
 The core should remain independent of Docling, Fidelis, Pydantic, pandas, and
 other domain-specific libraries; integrations belong in optional adapters.
+See the concrete [Data Healing design](docs/data-healing.md).
 
 ## Short term: 0.3 — repairs that can be trusted
 

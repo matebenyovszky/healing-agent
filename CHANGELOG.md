@@ -5,7 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.8] - Unreleased
+## [0.2.9] - Unreleased
+### Added
+- Optional repository-aware Git workflow with `GIT_MODE=off|patch|apply`
+- Patch provenance sidecars containing source hashes, repository path, Git HEAD, language, and `git apply --check` status
+- Guarded patch application that refuses stale or changed source files, with optional staging and no automatic commit/push
+- Language-neutral text patch API for PowerShell, shell, JavaScript, and other script adapters
+- A concrete dependency-free Data Healing protocol and acceptance design
+
+### Changed
+- `SAVE_GIT_PATCHES=True` remains supported as an alias for `GIT_MODE="patch"`
+
+## [0.2.8] - 2026-08-13
 ### Added
 - Optional `SAVE_GIT_PATCHES` output for minimal, reviewable unified diffs that can be consumed by `git apply` or a later pull-request workflow
 - Documentation for the boundary between local Git patches and future token-based GitHub draft PR integration
@@ -125,7 +136,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic documentation
 
 [0.2.1]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.0...v0.2.1
-[0.2.8]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.7...HEAD
+[0.2.9]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.6...v0.2.7
 [0.2.0]: https://github.com/matebenyovszky/healing-agent/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/matebenyovszky/healing-agent/compare/v0.1.1...v0.1.2

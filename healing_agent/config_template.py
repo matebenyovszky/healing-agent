@@ -8,7 +8,7 @@
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
 import os
 
-HEALING_AGENT_CONFIG_VERSION = "0.2.8"
+HEALING_AGENT_CONFIG_VERSION = "0.2.9"
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration
@@ -76,6 +76,13 @@ BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
 SAVE_AI_FIXES = True  # New parameter to control saving AI code suggestions
 SAVE_GIT_PATCHES = False  # Optionally emit a reviewable `git apply` patch
+# Git integration is language-neutral and opt-in:
+#   off   - no Git interaction
+#   patch - save and verify a patch, then use the normal Python file writer
+#   apply - verify and apply the patch through Git (no commit/push)
+GIT_MODE = "off"
+GIT_PATCH_DIR = None  # Optional directory for patch + JSON provenance artifacts
+GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 
 # Secret Redaction Configuration
 # -----------------------------
