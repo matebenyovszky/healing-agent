@@ -27,6 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Declared direct HTTP dependencies explicitly, bounded provider dependency major versions, and included the build backend in development dependencies
 - Made the manual PyPI release helper require an explicit TestPyPI or production target
 - Made the legacy GitHub release helper verify artifacts before an explicit, draft-only publish step
+- Separated manual TestPyPI runs from tag-triggered PyPI publishing to prevent duplicate attestations
+- Updated the release workflow to Node.js 24-based GitHub actions
 - Excluded local release environments and build output from source distributions
 - Raised provider and HTTP dependency baselines to current compatible versions; direct installs may use OpenAI 3 while the latest LiteLLM currently resolves OpenAI 2.x
 

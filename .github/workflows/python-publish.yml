@@ -18,9 +18,9 @@ jobs:
       contents: read
     
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.x'
     - name: Install build tools
@@ -34,8 +34,9 @@ jobs:
     - name: Check package metadata
       run: python -m twine check dist/*
     
-    # Publish to Test PyPI on every tag
+    # Manual runs are a TestPyPI dry run.
     - name: Publish to Test PyPI
+      if: github.event_name == 'workflow_dispatch'
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
@@ -44,9 +45,10 @@ jobs:
         print-hash: true
         skip-existing: true  # Skip if version exists
         
-    # Publish to PyPI only on releases
+    # Version tags publish only to production PyPI. Keeping registry uploads on
+    # separate runs also prevents duplicate PEP 740 attestation generation.
     - name: Publish to PyPI
-      if: startsWith(github.ref, 'refs/tags/v')
+      if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         packages-dir: dist/
