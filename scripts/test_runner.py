@@ -1,66 +1,35 @@
-import os
-import importlib.util
+"""Project test runner.
+
+This module delegates discovery and execution to pytest so only real tests are
+counted and any failure produces a non-zero process exit code.
+"""
+
+import subprocess
 import sys
+from pathlib import Path
+from typing import Sequence
 
-def execute_tests():
-    """
-    Runs all Python test files in the tests directory.
-    Prints results and any errors encountered.
-    """
-    # Get path to tests directory relative to this script
-    tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
-    
-    if not os.path.exists(tests_dir):
-        print(f"! Error: Tests directory not found at {tests_dir}")
-        return
 
-    print(f"\n♣ Running tests from: {tests_dir}\n")
-    
-    # Track test results
-    total_tests = 0
-    failed_tests = 0
-    
-    # Find and run all .py files in tests directory
-    for filename in os.listdir(tests_dir):
-        if filename.endswith('.py'):
-            total_tests += 1
-            test_path = os.path.join(tests_dir, filename)
-            
-            print(f"Running test: {filename}")
-            print("-" * 50)
-            
-            try:
-                # Import and run main() for all test files
-                spec = importlib.util.spec_from_file_location(
-                    filename[:-3], test_path)
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[filename[:-3]] = module
-                spec.loader.exec_module(module)
-                
-                # Look for and run main() if it exists
-                if hasattr(module, 'main'):
-                    module.main()
-                
-            except Exception as e:
-                failed_tests += 1
-                print(f"\n! Error in {filename}:")
-                print(f"  {str(e)}")
-                print(f"  {type(e).__name__}")
-            
-            print("\n")
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_TESTS_DIR = PROJECT_ROOT / "tests"
 
-    # Print summary
-    print("=" * 50)
-    print(f"Test Summary:")
-    print(f"Total tests: {total_tests}")
-    print(f"Failed: {failed_tests}")
-    print(f"Passed: {total_tests - failed_tests}")
-    print("=" * 50)
+
+def execute_tests(pytest_args: Sequence[str] = ()) -> int:
+    """Run pytest and raise ``CalledProcessError`` when tests fail."""
+    if not DEFAULT_TESTS_DIR.is_dir():
+        raise FileNotFoundError(f"Tests directory not found: {DEFAULT_TESTS_DIR}")
+
+    command = [
+        sys.executable,
+        "-m",
+        "pytest",
+        str(DEFAULT_TESTS_DIR),
+        *pytest_args,
+    ]
+    print(f"Running tests with: {' '.join(command)}", flush=True)
+    completed = subprocess.run(command, cwd=PROJECT_ROOT, check=True)
+    return completed.returncode
+
 
 if __name__ == "__main__":
-    try:
-        execute_tests()
-        print("\n✓ All test suites completed")
-    except Exception as e:
-        print(f"\n✗ Test execution failed: {str(e)}")
-        raise
+    execute_tests(sys.argv[1:])

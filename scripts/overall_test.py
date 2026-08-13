@@ -23,7 +23,8 @@ def check_and_install_prerequisites():
     required_packages = [
         'build',
         'hatchling',
-        'twine'
+        'twine',
+        'pytest',
     ]
     
     print("♣ Checking prerequisites...")
@@ -82,34 +83,17 @@ def install_package_local():
         sys.exit(1)
 
 def check_configuration():
-    """Check the configuration settings by running the configurator."""
+    """Load and validate configuration, failing the run when it is invalid."""
     print("♣ Checking configuration...")
-    try:
-        from healing_agent.config_loader import validate_config
-        validate_config()
-        print(f"♣ Configuration settings are valid.")
-    except Exception as e:
-        print(f"♣ Configuration error: {str(e)}")
-        #print(f"♣ Error traceback: {traceback.format_exc()}")
+    from healing_agent.config_loader import load_config
 
-def run_test_file_generator():
-    """Run the test file generator."""
-    print("♣ Generating test files...")
-    try:
-        subprocess.run([sys.executable, "scripts/test_file_generator.py"], check=True)
-        print("♣ Test files generated successfully.")
-    except subprocess.CalledProcessError as e:
-        print(f"♣ Failed to generate test files: {e}")
-        sys.exit(1)
+    load_config()
+    print("♣ Configuration settings are valid.")
 
 def run_tests():
     """Run all tests using the test runner."""
     print("\n♣ Running all tests...")
-    try:
-        execute_tests()
-    except Exception as e:
-        print(f"♣ Test execution failed: {str(e)}")
-        sys.exit(1)
+    execute_tests()
 
 def main():
     """Main function to orchestrate the package management and testing."""
@@ -124,9 +108,9 @@ def main():
     uninstall_previous_version()
     install_package_local()
     
-    # Setup and test
+    # Validate configuration and run the checked-in regression suite. Tests
+    # must never be regenerated here because that can overwrite real tests.
     check_configuration()
-    run_test_file_generator()
     run_tests()
     
     print("\n♣ Overall test process completed successfully!")

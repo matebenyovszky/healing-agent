@@ -8,7 +8,7 @@
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
 import os
 
-HEALING_AGENT_CONFIG_VERSION = "0.2.6"  
+HEALING_AGENT_CONFIG_VERSION = "0.2.7"
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration
@@ -24,7 +24,9 @@ AZURE = {
 # -------------------------
 OPENAI = {
     "api_key": os.getenv("OPENAI_API_KEY", "your-openai-key-here"),
-    "model": os.getenv("OPENAI_MODEL", "gpt-4"),  # or gpt-3.5-turbo
+    # Any Chat Completions-compatible model ID can be used. This balanced
+    # default should still be evaluated against your own repair benchmark.
+    "model": os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
     "organization_id": os.getenv("OPENAI_ORG_ID", None)  # Optional
 }
 
@@ -49,7 +51,7 @@ OLLAMA = {
 # -------------------
 LITELLM = {
     "api_key": os.getenv("LITELLM_API_KEY", "your-litellm-key"),  # If using hosted LiteLLM
-    "model": os.getenv("LITELLM_MODEL", "gpt-4"),  # Model identifier
+    "model": os.getenv("LITELLM_MODEL", "openai/gpt-5.6-terra"),
     "api_base": os.getenv("LITELLM_API_BASE", None)  # Optional custom API base URL
 }
 
@@ -57,8 +59,8 @@ LITELLM = {
 # ---------------------------------
 MAX_ATTEMPTS = 3  # Maximum number of fix attempts
 DEBUG = True  # Enable detailed logging
-AUTO_FIX = True  # Automatically apply fixes without confirmation
-AUTO_SYSCHANGE = True  # Automatically apply system changes without confirmation
+AUTO_FIX = False  # Safer default: propose and save fixes without applying them
+AUTO_SYSCHANGE = False  # Safer default: never install packages automatically
 
 # Healing Agent System Prompts
 # ---------------------------

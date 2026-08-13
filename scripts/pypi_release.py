@@ -1,35 +1,28 @@
+import argparse
+import importlib.util
 import os
-import sys
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
-def install_package(package):
-    """Install a Python package using pip."""
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        print(f"♣ Successfully installed {package}")
-    except subprocess.CalledProcessError:
-        print(f"♣ Failed to install {package}")
-        sys.exit(1)
-
-def check_and_install_prerequisites():
-    """Check and install all required packages."""
-    required_packages = [
-        'twine',
-        'build',
-        'hatchling'
-    ]
-    
+def check_prerequisites():
+    """Fail safely instead of mutating the release environment."""
+    required_packages = ["twine", "build", "hatchling", "pytest"]
     print("♣ Checking prerequisites...")
-    for package in required_packages:
-        try:
-            __import__(package)
-            print(f"♣ {package} is already installed")
-        except ImportError:
-            print(f"♣ Installing {package}...")
-            install_package(package)
+    missing = [
+        package
+        for package in required_packages
+        if importlib.util.find_spec(package) is None
+    ]
+    if missing:
+        raise SystemExit(
+            "Missing release dependencies: "
+            + ", ".join(missing)
+            + '. Install them with: pip install -e ".[dev]"'
+        )
 
-def build_and_upload_to_pypi(use_test_pypi=True):
+def build_and_upload_to_pypi(use_test_pypi, project_root):
     """Build and upload package to PyPI or TestPyPI."""
     # Get appropriate token from environment variable
     if use_test_pypi:
@@ -48,19 +41,34 @@ def build_and_upload_to_pypi(use_test_pypi=True):
             sys.exit(1)
 
     try:
-        # Build the package
+        # Test and build from a clean output directory.
+        subprocess.check_call(
+            [sys.executable, "-m", "pytest"], cwd=project_root
+        )
+        dist_dir = project_root / "dist"
+        if dist_dir.exists():
+            shutil.rmtree(dist_dir)
         print("♣ Building package...")
-        subprocess.check_call([sys.executable, "-m", "build"])
+        subprocess.check_call(
+            [sys.executable, "-m", "build"], cwd=project_root
+        )
 
         # Set repository URL based on target
         repo_url = "https://test.pypi.org/legacy/" if use_test_pypi else "https://upload.pypi.org/legacy/"
         target_name = "TestPyPI" if use_test_pypi else "PyPI"
 
         print(f"♣ Uploading to {target_name}...")
-        dist_files = list(Path("dist").glob("*"))
+        dist_files = sorted(
+            list(dist_dir.glob("*.whl")) + list(dist_dir.glob("*.tar.gz"))
+        )
         if not dist_files:
             print("♣ Error: No distribution files found in dist/")
             sys.exit(1)
+
+        subprocess.check_call(
+            [sys.executable, "-m", "twine", "check", *map(str, dist_files)],
+            cwd=project_root,
+        )
             
         cmd = [
             sys.executable, "-m", "twine", "upload",
@@ -70,7 +78,7 @@ def build_and_upload_to_pypi(use_test_pypi=True):
             "--password", token,
             "--verbose"
         ]
-        subprocess.check_call(cmd)
+        subprocess.check_call(cmd, cwd=project_root)
         print(f"♣ Successfully uploaded to {target_name}")
         
     except subprocess.CalledProcessError as e:
@@ -78,16 +86,25 @@ def build_and_upload_to_pypi(use_test_pypi=True):
         sys.exit(1)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Test, build, check, and explicitly publish Healing Agent."
+    )
+    parser.add_argument(
+        "target",
+        choices=("test", "prod"),
+        help="Use 'test' for TestPyPI or explicitly use 'prod' for PyPI.",
+    )
+    args = parser.parse_args()
+
     print("♣ Starting PyPI release process")
     print("="*60)
-    
-    # Get target from command line argument
-    use_test_pypi = False  # Default to TestPyPI
-    if len(sys.argv) > 1 and sys.argv[1].lower() == "prod":
-        use_test_pypi = False
+
+    use_test_pypi = args.target == "test"
     
     target = "TestPyPI" if use_test_pypi else "PyPI"
     print(f"♣ Target repository: {target}")
     
-    check_and_install_prerequisites()
-    build_and_upload_to_pypi(use_test_pypi)
+    check_prerequisites()
+    build_and_upload_to_pypi(
+        use_test_pypi, Path(__file__).resolve().parents[1]
+    )

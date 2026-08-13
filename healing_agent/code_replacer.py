@@ -1,5 +1,4 @@
 import ast
-import astor
 from typing import List, Tuple, Dict, Optional
 
 def decorator_checker(file_path: str) -> bool:
@@ -145,7 +144,10 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
             return False
 
         # Convert modified AST back to source code
-        new_source = astor.to_source(tree)
+        # ast.unparse is part of Python 3.9+, which is also the package's
+        # minimum supported Python version. Keep the final newline expected by
+        # source files without carrying the unmaintained astor dependency.
+        new_source = ast.unparse(tree) + '\n'
 
         # Write the updated content back to the file
         with open(file_path, 'w', encoding='utf-8') as file:

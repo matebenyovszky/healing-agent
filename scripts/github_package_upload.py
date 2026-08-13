@@ -1,3 +1,5 @@
+import argparse
+import importlib.util
 import os
 import sys
 import subprocess
@@ -5,10 +7,10 @@ import requests
 import shutil
 from pathlib import Path
 
-def get_version_from_toml():
+def get_version_from_toml(project_root):
     """Get version from pyproject.toml file."""
     try:
-        with open("pyproject.toml", "r") as f:
+        with open(project_root / "pyproject.toml", "r", encoding="utf-8") as f:
             lines = f.readlines()
             for line in lines:
                 if line.strip().startswith("version = "):
@@ -20,49 +22,51 @@ def get_version_from_toml():
         print(f"♣ Error reading version from pyproject.toml: {str(e)}")
         sys.exit(1)
 
-def install_package(package):
-    """Install a Python package using pip."""
-    try:
-        subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-        print(f"♣ Successfully installed {package}")
-    except subprocess.CalledProcessError:
-        print(f"♣ Failed to install {package}")
-        sys.exit(1)
-
-def check_and_install_prerequisites():
-    """Check and install all required packages."""
-    required_packages = [
-        'requests',
-        'build',
-        'hatchling',
-        'twine'
-    ]
-    
+def check_prerequisites():
+    """Fail safely instead of changing the release environment."""
+    required_packages = ["requests", "build", "hatchling", "twine", "pytest"]
     print("♣ Checking prerequisites...")
-    for package in required_packages:
-        try:
-            __import__(package)
-            print(f"♣ {package} is already installed")
-        except ImportError:
-            print(f"♣ Installing {package}...")
-            install_package(package)
+    missing = [
+        package
+        for package in required_packages
+        if importlib.util.find_spec(package) is None
+    ]
+    if missing:
+        raise SystemExit(
+            "Missing release dependencies: "
+            + ", ".join(missing)
+            + '. Install them with: pip install -e ".[dev]"'
+        )
 
-def build_package():
+def build_package(project_root):
     """Build the package using the build module."""
     print("♣ Building package...")
     try:
+        subprocess.check_call(
+            [sys.executable, "-m", "pytest"], cwd=project_root
+        )
+
         # Clean previous builds
-        dist_dir = Path('dist')
+        dist_dir = project_root / "dist"
         if dist_dir.exists():
             shutil.rmtree(dist_dir)
         
         # Build the package using build module (which will use hatchling)
-        subprocess.check_call([sys.executable, "-m", "build"])
+        subprocess.check_call(
+            [sys.executable, "-m", "build"], cwd=project_root
+        )
         
         # Get the built package files
-        dist_files = list(dist_dir.glob('*'))
+        dist_files = sorted(
+            list(dist_dir.glob("*.whl")) + list(dist_dir.glob("*.tar.gz"))
+        )
         if not dist_files:
             raise Exception("No package files were created")
+
+        subprocess.check_call(
+            [sys.executable, "-m", "twine", "check", *map(str, dist_files)],
+            cwd=project_root,
+        )
         
         print("♣ Package built successfully")
         return dist_files
@@ -71,7 +75,7 @@ def build_package():
         print(f"♣ Failed to build package: {str(e)}")
         sys.exit(1)
 
-def create_github_release_and_upload_assets(version):
+def create_github_release_and_upload_assets(version, asset_files):
     """Create a GitHub release and upload all assets."""
     # Check for GitHub token
     token = os.getenv('GITHUB_TOKEN')
@@ -90,21 +94,25 @@ def create_github_release_and_upload_assets(version):
         "tag_name": f"v{version}",
         "name": f"v{version}",
         "body": f"Pre-release version {version}",
-        "draft": False,
+        "draft": True,
         "prerelease": True
     }
 
     try:
+        tag_response = requests.get(
+            f"https://api.github.com/repos/{repo}/git/ref/tags/v{version}",
+            headers=headers,
+            timeout=30,
+        )
+        tag_response.raise_for_status()
+
         # Create the release
-        print("♣ Creating GitHub release...")
-        response = requests.post(url, headers=headers, json=data)
+        print("♣ Creating draft GitHub prerelease...")
+        response = requests.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()
         release = response.json()
         upload_url = release['upload_url'].replace("{?name,label}", "")
         print("♣ GitHub release created successfully")
-
-        # Build the package using hatchling
-        asset_files = build_package()
 
         # Upload each asset
         for asset_path in asset_files:
@@ -116,7 +124,8 @@ def create_github_release_and_upload_assets(version):
                 response = requests.post(
                     f"{upload_url}?name={asset_name}",
                     headers=headers,
-                    data=asset_file
+                    data=asset_file,
+                    timeout=120,
                 )
                 response.raise_for_status()
                 print(f"♣ Successfully uploaded {asset_name}")
@@ -136,17 +145,31 @@ def create_github_release_and_upload_assets(version):
 
 def main():
     """Main function to handle the release process."""
+    parser = argparse.ArgumentParser(
+        description="Build release artifacts and optionally create a draft GitHub prerelease."
+    )
+    parser.add_argument(
+        "--publish",
+        action="store_true",
+        help="Create the draft prerelease and upload artifacts after checks pass.",
+    )
+    args = parser.parse_args()
+    project_root = Path(__file__).resolve().parents[1]
+
     # Get version from pyproject.toml
-    version = get_version_from_toml()
+    version = get_version_from_toml(project_root)
     
     print(f"♣ Starting GitHub package release process for version {version}")
     print("="*60)
     
-    # Check and install prerequisites
-    check_and_install_prerequisites()
-    
-    # Create release and upload assets
-    create_github_release_and_upload_assets(version)
+    check_prerequisites()
+    asset_files = build_package(project_root)
+
+    if not args.publish:
+        print("♣ Checks passed; no GitHub changes made. Add --publish explicitly.")
+        return
+
+    create_github_release_and_upload_assets(version, asset_files)
 
 if __name__ == "__main__":
-    main() 
+    main()

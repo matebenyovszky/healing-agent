@@ -26,9 +26,13 @@ jobs:
     - name: Install build tools
       run: |
         python -m pip install --upgrade pip
-        pip install build twine
+        pip install -e ".[dev]"
+    - name: Run tests
+      run: python -m pytest
     - name: Build package
       run: python -m build
+    - name: Check package metadata
+      run: python -m twine check dist/*
     
     # Publish to Test PyPI on every tag
     - name: Publish to Test PyPI

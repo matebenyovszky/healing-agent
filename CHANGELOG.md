@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.7] - 2026-08-13
+### Added
+- Regression tests for bounded repair attempts and exception propagation
+- Standard pytest discovery and a CI test matrix for Python 3.9-3.13
+- A staged project roadmap covering safe repair, agent failures, integrations, and cross-language support
+- Optional dependency groups for development, Anthropic, and LiteLLM
+- Release guidance and roadmap items for business contracts, related tests, data-schema healing, agent-health sampling, and optional GitHub integration
+- A highlighted Data Healing product direction for verified Excel/PDF schema-drift adapter generation
+
+### Changed
+- `MAX_ATTEMPTS` now bounds recursive repair attempts across module reloads
+- Failed or disabled healing re-raises the original application exception instead of returning `None`
+- Failed repaired-module execution restores the previously loaded module
+- The test runner now returns a failing exit code when pytest fails
+- The overall test script no longer overwrites checked-in tests from examples
+- Overall configuration validation now fails the test run instead of continuing
+- New configurations default `AUTO_FIX` and `AUTO_SYSCHANGE` to `False`
+- Example defaults now use `gpt-5.6-terra`, `claude-sonnet-5`, and LiteLLM's `openai/gpt-5.6-terra`; arbitrary compatible model IDs remain configurable
+- Replaced the unmaintained `astor` dependency with Python's built-in `ast.unparse`
+- Declared direct HTTP dependencies explicitly, bounded provider dependency major versions, and included the build backend in development dependencies
+- Made the manual PyPI release helper require an explicit TestPyPI or production target
+- Made the legacy GitHub release helper verify artifacts before an explicit, draft-only publish step
+- Excluded local release environments and build output from source distributions
+- Raised provider and HTTP dependency baselines to current compatible versions; direct installs may use OpenAI 3 while the latest LiteLLM currently resolves OpenAI 2.x
+
 ## [0.2.6] - 2025-01-14
 ### Added
 - Save AI generated code suggestions to a separate file
@@ -86,7 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Basic documentation
 
 [0.2.1]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.0...v0.2.1
+[0.2.7]: https://github.com/matebenyovszky/healing-agent/compare/v0.2.6...v0.2.7
 [0.2.0]: https://github.com/matebenyovszky/healing-agent/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/matebenyovszky/healing-agent/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/matebenyovszky/healing-agent/compare/v0.1.0...v0.1.1
-[0.1.0]: https://github.com/matebenyovszky/healing-agent/releases/tag/v0.1.0 
+[0.1.0]: https://github.com/matebenyovszky/healing-agent/releases/tag/v0.1.0

@@ -141,6 +141,7 @@ celerybeat.pid
 # Environments
 .env
 .venv
+.tmp-release-*/
 env/
 venv/
 ENV/
