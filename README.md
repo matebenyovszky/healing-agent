@@ -2,7 +2,7 @@
 
 Healer Agent is an intelligent code assistant that catches with detailed context and fixes errors in your Python code. It leverages the power of AI to provide smart suggestions and corrections, helping you write more robust and "self-healing" code. Your program will be able to fix itself, it will have regenerative healing abilities like [Wolverine](https://github.com/biobootloader/wolverine). 
 
-⚠️ Not intended for production use. `AUTO_FIX` and `AUTO_SYSCHANGE` default to `False`. Enabling them permits Healing Agent to modify, reload, and run code or install packages. Failed healing always re-raises the original application exception.
+⚠️ Not intended for production use. To preserve Healing Agent's original autonomous behavior, `AUTO_FIX` defaults to `True`: a generated fix can modify, reload, and run supervised code. `AUTO_SYSCHANGE` remains `False` because it installs packages. Set `AUTO_FIX=False` for proposal-only operation. Failed healing always re-raises the original application exception.
 
 Goal: first actually usable autonomous coding agent in production
 
@@ -44,10 +44,18 @@ versioned change to the loader or a new boundary adapter. It should then replay
 both sample sets, validate business invariants, and return the code diff,
 mapping explanation, fixtures, and confidence evidence. It must not silently
 relax the canonical model, invent required values, or overwrite the original
-document. Shadow mode and human approval come before automatic activation.
+document. Shadow mode and human approval will be available as optional policies
+alongside the default automatic activation path.
 
-This capability is planned, not implemented in 0.2.7. See the dedicated
+This capability is planned, not implemented in 0.2.8. See the dedicated
 [Data Healing roadmap](ROADMAP.md#flagship-data-healing) for incremental steps.
+
+Data Healing is intentionally framework-level. The core package does not
+depend on Docling, Fidelis, Pydantic, pandas, or a particular business domain.
+It can inspect and repair the code at an ingestion boundary whenever that code
+raises an exception or fails a configured validation. Pydantic models and
+document/data extractors can be supplied by an application or a future
+optional adapter.
 
 ## How it works 🧠
 
@@ -169,9 +177,10 @@ The configuration file includes:
    ```python
    MAX_ATTEMPTS = 3       # Hard limit across recursive repair/reload attempts
    DEBUG = True           # Enable detailed logging
-   AUTO_FIX = False       # Opt in to applying and executing generated fixes
-   AUTO_SYSCHANGE = False # Opt in to automatic package installation
-   BACKUP_ENABLED = True # Create backups before fixes
+   AUTO_FIX = True          # Apply and execute generated fixes by default
+   AUTO_SYSCHANGE = False   # Never install packages automatically by default
+   BACKUP_ENABLED = True    # Create backups before fixes
+   SAVE_GIT_PATCHES = False # Optionally save a reviewable unified diff
    ```
 
 `MAX_ATTEMPTS` counts repair cycles for the same decorated function, including
@@ -184,6 +193,19 @@ If a repaired module cannot be loaded or its top-level code fails, Healing Agent
 restores the previous module object in `sys.modules`. This protects the running
 process, but does not revert the edited source file. Keep `BACKUP_ENABLED=True`
 and use version control so source changes remain recoverable.
+
+### Reviewable Git patches
+
+Set `SAVE_GIT_PATCHES=True` to save each valid generated replacement as a
+minimal unified diff under `_healing_agent_fixes/`. The artifact uses Git paths
+and can be reviewed or applied with `git apply <file.patch>`.
+
+Patch generation is independent of `AUTO_FIX`: with the default
+`AUTO_FIX=True`, it is an audit artifact for the automatically applied
+candidate; with `AUTO_FIX=False`, it is a proposal that leaves the source file
+unchanged. In 0.2.8 this does not create commits, push branches, or open pull
+requests, and a generated patch is not evidence that tests passed. Isolated
+verification and optional draft-PR publication remain 0.3 milestones.
 
 ### Automatic system changes
 
@@ -210,8 +232,8 @@ The model name is configurable and is not restricted to a hard-coded list. The O
 
 Anthropic and LiteLLM support are optional extras (`pip install
 "healing-agent[anthropic]"` or `pip install "healing-agent[litellm]"`). The
-current LiteLLM extra requires Python 3.10 or newer; the core package continues
-to support Python 3.9. The 0.2.7 dependency baselines are OpenAI 2.20.0,
+current LiteLLM extra requires Python 3.10 or newer; the package supports
+Python 3.10–3.13. The 0.2.8 dependency baselines are OpenAI 2.20.0,
 Anthropic 0.121.0, LiteLLM 1.96.2, HTTPX 0.28.1, and Requests 2.34.2, with
 compatible updates allowed inside the declared major range. A normal install
 currently resolves to OpenAI 3.0.0. LiteLLM 1.96.2 requires OpenAI
@@ -236,10 +258,19 @@ creating a version tag or publishing to PyPI.
 
 See [ROADMAP.md](ROADMAP.md) for small release steps toward verified repair, LLM and agent failure recovery, harness integrations such as Hermes Agent, and a language-neutral repair coordinator.
 
-Healing Agent does not currently connect runtime failures to GitHub issues or
-pull requests. The repository contains release automation, while an optional,
-disabled-by-default GitHub App/Action that can open evidence-backed draft repair
-PRs is planned in the roadmap.
+Healing Agent can emit a local, reviewable Git patch, but does not currently
+create commits, push branches, or connect runtime failures to GitHub issues and
+pull requests. The runtime therefore does not read or require a GitHub token.
+
+For the future GitHub integration, a token would be supplied by the host
+environment (for example an Actions secret or a fine-grained PAT), never by
+the repaired application or the LLM context. It would need narrowly scoped
+repository permissions such as `contents:write` and `pull_requests:write`
+(and `issues:write` only when issue creation is enabled). A token by itself is
+not proof that a fix is safe: the integration must apply the patch on an
+isolated branch, run `git apply --check`, execute configured tests, commit and
+push only after policy approval, and then open a draft PR. That flow is planned
+for the roadmap; `0.2.8` only creates the local patch artifact.
 
 ## Use Cases 💡
 

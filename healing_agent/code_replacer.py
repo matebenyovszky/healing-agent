@@ -1,5 +1,5 @@
 import ast
-from typing import List, Tuple, Dict, Optional
+from typing import Dict, List, Optional, Tuple
 
 def decorator_checker(file_path: str) -> bool:
     """
@@ -98,9 +98,62 @@ def decorator_checker(file_path: str) -> bool:
         print(f"♣ Error checking/correcting decorators: {str(e)}")
         return False
 
+def build_replacement_source(
+    context: Dict, fixed_code: str
+) -> Optional[Tuple[str, str]]:
+    """Build the smallest source-file replacement without writing it."""
+    file_path = context['error']['file']
+    function_name = context['function_info']['name']
+
+    if not all([file_path, function_name, fixed_code]):
+        print("♣ Missing required parameters for code replacement")
+        return None
+
+    with open(file_path, 'r', encoding='utf-8') as file:
+        source = file.read()
+    tree = ast.parse(source)
+
+    fixed_tree = ast.parse(fixed_code)
+    if len(fixed_tree.body) != 1 or not isinstance(
+        fixed_tree.body[0], (ast.FunctionDef, ast.AsyncFunctionDef)
+    ):
+        print("♣ Fixed code must contain exactly one function definition")
+        return None
+    fixed_function = fixed_tree.body[0]
+    if fixed_function.name != function_name:
+        print(
+            f"♣ Fixed function name {fixed_function.name} does not match "
+            f"{function_name}"
+        )
+        return None
+
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
+            node.name == function_name
+        ):
+            start_line = min(
+                [node.lineno] + [decorator.lineno for decorator in node.decorator_list]
+            )
+            end_line = node.end_lineno
+            break
+    else:
+        print(f"♣ Could not find function {function_name} in {file_path}")
+        return None
+
+    source_lines = source.splitlines(keepends=True)
+    replacement = fixed_code.rstrip() + '\n'
+    new_source = ''.join(
+        source_lines[: start_line - 1]
+        + [replacement]
+        + source_lines[end_line:]
+    )
+    compile(new_source, file_path, 'exec')
+    return source, new_source
+
+
 def function_replacer(context: Dict, fixed_code: str) -> bool:
     """
-    Updates the original file by replacing the buggy function with the fixed code using AST.
+    Update the original file with the minimal replacement built from AST lines.
     
     Args:
         context (Dict): Contains information about the bug context including:
@@ -108,46 +161,16 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
             - function_name: Name of the function to replace
             - original_code: Original function code
         fixed_code (str): The new code to replace the buggy function with
-        config (Optional[Dict]): Configuration parameters (unused for now)
-        
     Returns:
         bool: True if the update was successful, False otherwise
     """
     try:
 
+        replacement = build_replacement_source(context, fixed_code)
+        if replacement is None:
+            return False
+        _, new_source = replacement
         file_path = context['error']['file']
-        function_name = context['function_info']['name']
-        
-        if not all([file_path, function_name, fixed_code]):
-            print("♣ Missing required parameters for code replacement")
-            return False
-
-        # Parse the original file
-        with open(file_path, 'r', encoding='utf-8') as file:
-            source = file.read()
-        tree = ast.parse(source)
-
-        # Parse the fixed code
-        fixed_tree = ast.parse(fixed_code)
-        if not isinstance(fixed_tree.body[0], ast.FunctionDef):
-            print("♣ Fixed code does not contain a function definition")
-            return False
-        fixed_function = fixed_tree.body[0]
-
-        # Find and replace the function in the original AST
-        for i, node in enumerate(tree.body):
-            if isinstance(node, ast.FunctionDef) and node.name == function_name:
-                tree.body[i] = fixed_function
-                break
-        else:
-            print(f"♣ Could not find function {function_name} in {file_path}")
-            return False
-
-        # Convert modified AST back to source code
-        # ast.unparse is part of Python 3.9+, which is also the package's
-        # minimum supported Python version. Keep the final newline expected by
-        # source files without carrying the unmaintained astor dependency.
-        new_source = ast.unparse(tree) + '\n'
 
         # Write the updated content back to the file
         with open(file_path, 'w', encoding='utf-8') as file:

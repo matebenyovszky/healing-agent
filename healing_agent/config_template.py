@@ -8,7 +8,7 @@
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
 import os
 
-HEALING_AGENT_CONFIG_VERSION = "0.2.7"
+HEALING_AGENT_CONFIG_VERSION = "0.2.8"
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration
@@ -59,7 +59,7 @@ LITELLM = {
 # ---------------------------------
 MAX_ATTEMPTS = 3  # Maximum number of fix attempts
 DEBUG = True  # Enable detailed logging
-AUTO_FIX = False  # Safer default: propose and save fixes without applying them
+AUTO_FIX = True  # Preserve classic behavior: apply and execute generated fixes
 AUTO_SYSCHANGE = False  # Safer default: never install packages automatically
 
 # Healing Agent System Prompts
@@ -75,6 +75,7 @@ SYSTEM_PROMPTS = {
 BACKUP_ENABLED = True  # Enable code backups before fixes
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
 SAVE_AI_FIXES = True  # New parameter to control saving AI code suggestions
+SAVE_GIT_PATCHES = False  # Optionally emit a reviewable `git apply` patch
 
 # Secret Redaction Configuration
 # -----------------------------

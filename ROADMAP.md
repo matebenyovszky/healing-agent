@@ -1,6 +1,6 @@
 # Healing Agent roadmap
 
-Healing Agent's direction is a safe repair layer for programs and agents: observe a failure, preserve evidence, propose the smallest repair, verify it in isolation, and return a reviewable result. Runtime mutation remains an explicit opt-in.
+Healing Agent's direction is a repair layer for programs and agents: observe a failure, preserve evidence, propose the smallest repair, verify it, and return a reviewable result. Automatic application remains the compatibility default, while proposal-only and approval policies are configurable alternatives.
 
 This roadmap is ordered by dependency and risk. Each checkbox should be small enough to become one focused issue or pull request.
 
@@ -16,7 +16,7 @@ The differentiator should be the complete governed repair loop:
 1. preserve the original document and extraction provenance;
 2. profile the failing sample and compare it with known-good samples;
 3. distinguish extraction failure, schema drift, and genuinely invalid data;
-4. map the changed structure to the canonical Pydantic/data contract;
+4. map the changed structure to an application-supplied canonical data contract (Pydantic is optional);
 5. generate a narrow, versioned loader adapter rather than weakening the model;
 6. create regression fixtures and replay old plus new document variants;
 7. verify business invariants and report ambiguous or missing required fields;
@@ -26,7 +26,7 @@ Initial vertical slice: Excel column/header/sheet drift into a Pydantic model.
 Second slice: PDF table heading/layout drift using pluggable extractors while
 retaining page, table, cell, and bounding-box provenance.
 
-## Current release: 0.2.7 safety baseline
+## Released: 0.2.7 safety baseline
 
 - [x] Bound recursive healing with `MAX_ATTEMPTS`.
 - [x] Re-raise the original exception whenever healing does not succeed.
@@ -34,11 +34,25 @@ retaining page, table, cell, and bounding-box provenance.
 - [x] Use pytest discovery and propagate its exit status.
 - [x] Make invalid configuration fail the overall test run.
 - [x] Default new configurations to `AUTO_FIX=False` and `AUTO_SYSCHANGE=False`.
-- [x] Add a Python 3.9-3.13 CI matrix and package metadata check.
+- [x] Add a Python 3.10-3.13 CI matrix and package metadata check.
 - [x] Review the 0.2.7 diff and changelog.
 - [x] Build the 0.2.7 artifacts and install the wheel in a clean virtual environment.
-- [ ] Publish 0.2.7 to TestPyPI and run an install smoke test.
-- [ ] Tag `v0.2.7`, create release notes, then publish to PyPI.
+- [x] Publish 0.2.7 to TestPyPI and run an install smoke test.
+- [x] Tag `v0.2.7`, create release notes, then publish to PyPI.
+
+## Next release: 0.2.8 — reviewable patch bridge
+
+- [x] Restore `AUTO_FIX=True` as the default while keeping `AUTO_SYSCHANGE=False`.
+- [x] Generate a minimal candidate replacement without changing unrelated source formatting.
+- [x] Add optional `SAVE_GIT_PATCHES` artifacts consumable by `git apply`.
+- [ ] Attach verification evidence and explicit proposal/applied status to patch metadata.
+- [ ] Add a CLI command that verifies and applies a selected patch.
+
+The patch artifact is the prerequisite for later branch, draft-PR, and GitHub
+approval integrations. It is not a prerequisite for Data Healing itself: data
+profiling, adapter generation, and replay can be developed locally first.
+The core should remain independent of Docling, Fidelis, Pydantic, pandas, and
+other domain-specific libraries; integrations belong in optional adapters.
 
 ## Short term: 0.3 — repairs that can be trusted
 
@@ -46,7 +60,7 @@ retaining page, table, cell, and bounding-box provenance.
 
 - [ ] Introduce a `RepairResult` containing status, original error, proposal, diff, attempts, verification evidence, and artifact paths.
 - [ ] Separate `observe`, `propose`, `verify`, and `apply` stages.
-- [ ] Add modes: `report`, `propose`, `verify`, and `apply`; keep `apply` opt-in.
+- [ ] Add modes: `report`, `propose`, `verify`, and `apply`; retain `apply` as the compatibility default and make stricter policies easy to select.
 - [ ] Add maximum changed-line and allowed-path policies.
 
 Acceptance: an unsuccessful run raises the application error and still leaves a complete, machine-readable repair report.
@@ -57,7 +71,7 @@ Acceptance: an unsuccessful run raises the application error and still leaves a 
 - [ ] Compile the candidate and run a configurable test command with a timeout.
 - [ ] Re-run the original failing input plus user-supplied regression cases.
 - [ ] Reject patches that edit unrelated files, weaken tests, or exceed the retry budget.
-- [ ] Promote a verified patch to the real tree only after policy approval.
+- [ ] Promote a verified patch according to the configured policy: automatic apply by default, or explicit approval when selected.
 
 Acceptance: a candidate cannot reach the working tree unless every configured gate passes.
 
@@ -82,7 +96,7 @@ Acceptance: a repair can explain which business invariant it preserves and which
 - [ ] Propose versioned input adapters for renamed fields, changed nesting, safe type conversions, date/unit formats, optional fields, and enum aliases.
 - [ ] Never invent required business data; quarantine or escalate records that cannot satisfy the declared contract.
 - [ ] Replay historical valid and invalid samples and verify domain invariants before accepting an adapter.
-- [ ] Add shadow mode, deterministic sampling, drift metrics, circuit breakers, and rollback before any automatic activation.
+- [ ] Add optional shadow/approval modes, deterministic sampling, drift metrics, circuit breakers, and rollback around automatic activation.
 - [ ] Generate the adapter, regression fixtures, and an upstream-change report as separate reviewable artifacts.
 
 Acceptance: a changed but business-valid payload can be normalized at the boundary without weakening the domain model or silently corrupting data.
@@ -163,6 +177,7 @@ to zero until verification and approval policies are configured.
 - [ ] Build a Hermes Agent proof of concept: ingest a failed tool call or skill run, produce a proposed skill/tool repair, replay it in a sandbox, and return a diff for approval.
 - [ ] Add OpenTelemetry and Sentry-style ingestion adapters for production exceptions and agent traces.
 - [ ] Add an optional GitHub App/Action that turns a verified incident repair into an issue or draft pull request.
+- [ ] Document token boundaries: host-provided `GITHUB_TOKEN`/fine-grained PAT, least-privilege permissions, isolated branch, `git apply --check`, tests, commit, push, then draft PR.
 - [ ] Use fine-grained permissions, dry-run mode, evidence attachments, and branch/path allowlists; never push to the default branch, merge, or close issues autonomously.
 
 For self-improving systems such as [Hermes Agent](https://github.com/NousResearch/hermes-agent) and [Browser Harness](https://github.com/browser-use/browser-harness), Healing Agent should be an external immune system rather than editable agent memory. The harness may learn skills; Healing Agent independently enforces budgets, provenance, verification, rollback, and approval boundaries.

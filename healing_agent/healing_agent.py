@@ -11,6 +11,7 @@ from .code_replacer import function_replacer
 from .config_loader import load_config
 from .exception_handler import capture_context
 from .exception_saver import save_context
+from .git_patch_saver import save_git_patch
 from .redactor import redact
 
 
@@ -156,6 +157,12 @@ def _attempt_healing(
         saved_fix = save_ai_fix(context)
         if config.get("DEBUG"):
             print(f"♣ AI fix saved to: {saved_fix}")
+
+    if config.get("SAVE_GIT_PATCHES", False) and fixed_code:
+        saved_patch = save_git_patch(context)
+        context["git_patch_path"] = saved_patch
+        if config.get("DEBUG"):
+            print(f"♣ Reviewable Git patch saved to: {saved_patch}")
 
     if config.get("SAVE_EXCEPTIONS"):
         saved_context = save_context(context)
