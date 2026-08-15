@@ -1,177 +1,81 @@
-# Data Healing design
+# Data Healing
 
-Data Healing is the boundary layer that repairs a loader when the incoming
-document or payload changes shape but still contains valid business data. It
-does not guess business rules, weaken a canonical model, or become an Excel/PDF
-parser. The application supplies the contract and the extractor; Healing Agent
-supplies evidence collection, drift diagnosis, adapter proposals, replay, and
-approval gates.
+Data Healing is Healing Agent's answer to a recurring IT failure class: the
+code is fine, but the world changed. A CSV renames or reorders its columns, an
+API renests its fields, a date format flips locale. The business data is still
+there — the structure drifted.
 
-## Target flow
+## The approach: minimal code, maximal verification
 
-```text
-source -> extractor -> evidence envelope -> drift classifier
-                                      -> adapter proposal
-                                      -> replay + contract/invariant checks
-                                      -> report | shadow | canary | apply
-```
+Healing Agent deliberately does **not** ship a schema-matching engine, fuzzy
+matcher, or data-profiling subsystem. The entire implementation is:
 
-Every stage produces an artifact. A failed stage preserves the original source,
-the original exception, and the evidence envelope. An adapter is accepted only
-when it passes old fixtures, the changed sample, and the application's
-authoritative invariants.
+1. **Drift-aware prompts.** The code-fixer prompt instructs the model to adapt
+   the function so it handles **both** the previous and the new structure
+   (runtime header/field inspection, alias mapping), to map fields only by
+   names that are synonyms or translations of the *same business concept*, and
+   to raise a clear error instead of inventing missing required data. The
+   hint-generator prompt carries the matching rule so the analysis step cannot
+   steer the fixer toward fabrication.
+2. **Acceptance tests as the contract.** A drift scenario passes only when the
+   healed source produces the identical business result for the old **and**
+   the new input. "The exception disappeared" is never accepted as success.
 
-## Small, dependency-free protocol
+That is the whole design. Intelligence lives in the model; trust lives in the
+tests.
 
-The core should use plain mappings/dataclasses and callables, not import
-Pydantic, pandas, Docling, Fidelis, or a particular document library.
-Applications may provide any of these through an optional adapter.
+## What is demonstrated (live, `tests/test_data_drift.py`)
 
-```python
-from dataclasses import dataclass
-from typing import Any, Callable, Mapping, Sequence
+| # | Scenario | Drift | Expectation |
+|---|---|---|---|
+| 1 | CSV renamed headers | English → Hungarian column names | heal, both formats work |
+| 2 | CSV reordered columns | index-based parsing broke | heal, both formats work |
+| 3 | API payload reshaped | keys renamed + renested | heal, both formats work |
+| 4 | Date format drift | ISO → `DD.MM.YYYY` | heal, both formats work |
+| 5 | Error in undecorated helper | fix must adapt at the decorated boundary | heal, both formats work |
+| 6 | Required column missing | no honest mapping exists | raise, never fabricate |
+| 7 | Missing column + decoy numeric column | order numbers ≠ amounts | raise, never fabricate |
 
-@dataclass(frozen=True)
-class SourceEvidence:
-    source_id: str
-    source_kind: str                 # excel, pdf, json, api, database, ...
-    extractor: str
-    extractor_version: str | None
-    schema: Mapping[str, Any]
-    samples: Sequence[Mapping[str, Any]]
-    provenance: Sequence[Mapping[str, Any]]
+The tests write each loader to a temp module, run the old input (must work
+untouched), run the drifted input (triggers healing), then re-import the healed
+source and assert both inputs produce the same expected result. They skip
+automatically when no AI provider is configured, so CI stays green.
 
-@dataclass(frozen=True)
-class DataContract:
-    name: str
-    version: str
-    schema: Mapping[str, Any]
-    validate: Callable[[Any], Any]
-    invariants: Sequence[Callable[[Any], bool]] = ()
+## The guardrail story (why adversarial tests matter)
 
-@dataclass(frozen=True)
-class AdapterProposal:
-    source_version: str | None
-    target_contract: str
-    mapping: Mapping[str, str]
-    transformations: Sequence[str]
-    code_or_callable: Any
-    fixtures: Sequence[Any]
-    confidence: float
-    evidence: Mapping[str, Any]
-```
+Scenario 7 initially **failed**: the model saw the drifted headers in the error
+context and "fixed" the loader by summing the order-number column as amounts —
+even the generated hint encouraged substituting "the numeric column present in
+the CSV". Two targeted prompt sentences (an alias must name the *same business
+concept*; an identifier/order number/date is never a valid alias for an
+amount) fixed the behavior, and the adversarial test keeps it fixed.
 
-`validate` may call a Pydantic model, dataclass, JSON Schema validator, or a
-hand-written function. The contract is authoritative; the model may propose a
-mapping but cannot change required fields or invariants.
-
-## Five implementation stages
-
-### 1. Capture (safe and deterministic)
-
-At the ingestion boundary, capture a bounded, redacted envelope:
-
-- source identifier and version/ETag when available;
-- extractor name/version and parsing options;
-- field paths, types, null rates, cardinality, and representative samples;
-- provenance such as workbook/sheet/header coordinates or PDF page/table/cell
-  coordinates;
-- the original validation/parse error and a hash of the source.
-
-Never store the whole document by default. Keep a configurable sample budget,
-redact secrets before persistence or model submission, and make the envelope
-replayable without credentials.
-
-### 2. Classify drift
-
-Use deterministic checks before an LLM:
-
-- renamed header or field with high similarity;
-- moved sheet/table or changed nesting;
-- safe type/locale/unit conversion;
-- optional field added or removed;
-- malformed record versus an upstream schema/version change;
-- extractor failure (OCR, encoding, merged cells, reading order).
-
-The classifier returns `no_drift`, `record_error`, `schema_drift`,
-`extractor_error`, or `ambiguous`. Ambiguous cases are report-only.
-
-### 3. Propose a narrow adapter
-
-Generate a versioned input adapter, not a weaker target contract. An adapter
-may rename a column, select a new sheet, unwrap a nesting level, normalize a
-date/decimal/unit, or map an explicitly allowed enum alias. It must not invent
-required values, silently drop records, or convert an invalid value merely to
-make validation pass.
-
-The first vertical slice should accept an application-provided tabular
-extractor and demonstrate two Excel layouts mapping to one unchanged contract.
-The second should accept a document extractor's table/cell provenance; a PDF
-library remains an optional integration.
-
-### 4. Replay and verify
-
-Run the candidate adapter in an isolated process or temporary worktree against:
-
-1. historical valid fixtures;
-2. historical invalid fixtures;
-3. the changed source sample;
-4. adversarial cases for missing required fields, ambiguous aliases, locale,
-   duplicate rows, and unit mistakes.
-
-Record validation errors, invariant results, row/record counts, dropped or
-quarantined items, and a machine-readable diff. A candidate is not successful
-because parsing stops raising an exception.
-
-### 5. Activate with policy
-
-Support four explicit policies:
-
-- `report`: create evidence only;
-- `shadow`: run the adapter beside the old loader and compare outputs;
-- `canary`: use it for deterministic samples and monitor drift/quality;
-- `apply`: activate after approval, with rollback to the prior adapter.
-
-Hard failures and high-risk sources are always observed. Optional deterministic
-sampling can use `hash(source_id + contract_version)`, but random sampling must
-never decide whether an explicit failure is captured.
-
-## Proposed package boundaries
+This is the working loop for evolving Data Healing:
 
 ```text
-healing_agent/data_healing/
-  protocol.py       # evidence, contract, proposal, result dataclasses
-  profile.py        # deterministic schema/profile comparisons
-  classify.py       # drift/error classification
-  replay.py         # isolated fixture replay and invariant checks
-  policy.py         # report/shadow/canary/apply gates
-  adapters/
-    tabular.py      # generic rows/columns adapter
-    pydantic.py     # optional extra, not a core dependency
-    document.py     # extractor-neutral provenance adapter
+adversarial test fails -> smallest prompt change -> full suite re-run -> keep the test forever
 ```
 
-The first release should expose `heal_input(...)` or a boundary decorator that
-accepts `contract=`, `extractor=`, `fixtures=`, and `policy=`. It should return
-a `DataHealingResult` even when the original application exception is
-re-raised, so operators can inspect the evidence path without parsing logs.
+## How to extend
 
-## Acceptance criteria for the first demonstrator
+Escalate in this order, and only when a test empirically fails:
 
-Given two Excel-like row streams with renamed headers and a stable contract:
+1. **Prompt** — a sentence in `ai_code_fixer.py` / `ai_hint_generator.py`.
+2. **Context** — give the model more to see (e.g. include related functions
+   from the same file in the fix prompt; `agent_tools/tool_list_files_functions.py`
+   already exists). Not needed so far: the helper-function scenario passed on
+   traceback context alone.
+3. **Code** — only if prompts and context demonstrably cannot solve a scenario
+   class, consider a small dedicated mechanism. None has been needed yet.
 
-1. the original loader fails with a validation error;
-2. the envelope records both schemas and sample/provenance evidence;
-3. the classifier identifies header drift rather than invalid business data;
-4. the proposed adapter maps only approved aliases;
-5. old, new, and adversarial fixtures replay successfully or are quarantined;
-6. invariants and record counts pass;
-7. report/shadow output includes the adapter, mapping, confidence, evidence,
-   and rollback information;
-8. no Docling, Fidelis, Pydantic, pandas, or model-specific package is needed
-   to install the core.
+Candidate scenarios worth adding next: Excel workbooks (sheet renames, moved
+header rows, merged cells), encoding drift, multi-record quarantine (mixed
+valid/invalid rows), paginated API shape changes, and drift in functions with
+multiple data sources.
 
-This is the feature that can later make Healing Agent valuable to agent
-harnesses: a failed tool input can be treated as a versioned boundary contract
-failure, repaired and replayed, rather than patched blindly inside the agent's
-business logic.
+## Guardrails (non-negotiable)
+
+- Never treat "no exception" as success — assert business results.
+- Never invent required business data; unmappable input must raise clearly.
+- Old-format inputs must keep working after every heal.
+- Secrets are redacted before any context reaches a provider or disk.

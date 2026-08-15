@@ -95,7 +95,8 @@ Return only the fixed code without any explanations or markdown formatting.
 Ensure the fixed code maintains the same function name and signature.
 Add appropriate error handling where necessary.
 If the error was caused by input data whose structure changed (renamed columns or fields, different column order, changed nesting or format), adapt the code so it handles BOTH the previous and the new structure — e.g. inspect the actual headers/fields at runtime and map known aliases — instead of hardcoding one layout.
-Never invent values for missing required business data; raise a clear error for records that cannot be mapped.
+Map fields only by names that are synonyms or translations of the SAME business concept as the expected field. An identifier, order number, code, date or other unrelated field is NEVER a valid alias for a required field (such as an amount), even if its values have a compatible type. Do not add a field to an alias mapping merely because it appears in the current input's headers.
+Never invent values for missing required business data; raise a clear error when a required field cannot be confidently identified or a record cannot be mapped.
 """
 
 def validate_fixed_code(fixed_code: str) -> bool:

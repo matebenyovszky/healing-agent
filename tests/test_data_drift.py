@@ -113,10 +113,56 @@ NEW_PAYLOAD = {
 EXPECTED = {"total": 2000, "customers": ["Alfa Kft", "Beta Zrt"]}
 EXPECTED_API = {"total": 2000, "names": ["Alfa Kft", "Beta Zrt"]}
 
+# --- Harder scenarios --------------------------------------------------------
+
+DATE_LOADER = '''
+import healing_agent
+
+@healing_agent
+def monthly_totals(csv_text):
+    import csv, io
+    from datetime import datetime
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    totals = {}
+    for r in rows:
+        d = datetime.strptime(r["date"], "%Y-%m-%d")
+        key = f"{d.year}-{d.month:02d}"
+        totals[key] = totals.get(key, 0) + int(r["amount"])
+    return totals
+'''
+
+OLD_CSV_DATES = "date,customer,amount\n2026-01-15,Alfa Kft,1200\n2026-02-16,Beta Zrt,800\n"
+# Drift: dates switch to Hungarian DD.MM.YYYY (days > 12, so unambiguous).
+NEW_CSV_DATES = "date,customer,amount\n15.01.2026,Alfa Kft,1200\n16.02.2026,Beta Zrt,800\n"
+EXPECTED_DATES = {"2026-01": 1200, "2026-02": 800}
+
+# The exception surfaces inside an UNdecorated helper; only the decorated
+# entry point can be rewritten. The fix must adapt at the boundary.
+HELPER_LOADER = '''
+import healing_agent
+
+def parse_row(row):
+    return {"customer": row["customer"], "amount": int(row["amount"])}
+
+@healing_agent
+def load_sales(csv_text):
+    import csv, io
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    total = 0
+    customers = []
+    for r in rows:
+        parsed = parse_row(r)
+        total += parsed["amount"]
+        customers.append(parsed["customer"])
+    return {"total": total, "customers": sorted(customers)}
+'''
+
 SCENARIOS = [
     ("csv_renamed_headers", CSV_LOADER, "load_sales", OLD_CSV, NEW_CSV_RENAMED, EXPECTED),
     ("csv_reordered_columns", INDEX_LOADER, "load_sales", OLD_CSV, NEW_CSV_REORDERED, EXPECTED),
     ("api_renamed_renested", API_LOADER, "summarize_orders", OLD_PAYLOAD, NEW_PAYLOAD, EXPECTED_API),
+    ("date_format_drift", DATE_LOADER, "monthly_totals", OLD_CSV_DATES, NEW_CSV_DATES, EXPECTED_DATES),
+    ("error_in_helper_function", HELPER_LOADER, "load_sales", OLD_CSV, NEW_CSV_RENAMED, EXPECTED),
 ]
 
 
@@ -154,3 +200,69 @@ def test_drifted_input_is_healed(tmp_path, name, source, func_name, old_data, ne
     healed = _import_module(module_path, module_name + "_healed")
     assert getattr(healed, func_name)(old_data) == expected, "old format broke after healing"
     assert getattr(healed, func_name)(new_data) == expected, "new format not handled after healing"
+
+
+# --- Guardrail: unmappable drift must FAIL, not fabricate --------------------
+
+MISSING_COLUMN_LOADER = '''
+import healing_agent
+
+@healing_agent(MAX_ATTEMPTS=1)
+def load_sales(csv_text):
+    import csv, io
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    total = 0
+    customers = []
+    for r in rows:
+        total += int(r["amount"])
+        customers.append(r["customer"])
+    return {"total": total, "customers": sorted(customers)}
+'''
+
+# The amount column is GONE, not renamed. No honest mapping exists.
+NEW_CSV_NO_AMOUNT = "datum,ugyfel\n2026-01-15,Alfa Kft\n2026-02-16,Beta Zrt\n"
+
+
+def test_unmappable_drift_raises_instead_of_fabricating(tmp_path):
+    """Required business data is missing entirely: healing must surface an
+    error, never invent amounts. Old-format inputs must keep working on the
+    (possibly rewritten) source afterwards."""
+    module_path = tmp_path / "loader_missing_column.py"
+    module_path.write_text(MISSING_COLUMN_LOADER, encoding="utf-8")
+    module = _import_module(module_path, "drift_demo_missing_column")
+
+    # Old data works.
+    assert module.load_sales(OLD_CSV) == EXPECTED
+
+    # Unmappable data must end in an exception, not a fabricated result.
+    with pytest.raises(Exception):
+        module.load_sales(NEW_CSV_NO_AMOUNT)
+
+    # Whatever healing did to the file, the old format must still work…
+    healed = _import_module(module_path, "drift_demo_missing_column_healed")
+    assert healed.load_sales(OLD_CSV) == EXPECTED, "old format broke after healing attempt"
+
+
+# Adversarial variant: the amount column is gone, but a DECOY numeric column
+# (order number) is present. A lazy fix would sum order numbers as amounts.
+NEW_CSV_DECOY_NUMERIC = (
+    "datum,ugyfel,rendeles_szam\n"
+    "2026-01-15,Alfa Kft,5001\n"
+    "2026-02-16,Beta Zrt,5002\n"
+)
+
+
+def test_decoy_numeric_column_is_not_mistaken_for_amount(tmp_path):
+    """Missing required column + an unrelated numeric column: the healed code
+    must not silently repurpose the decoy as business data."""
+    module_path = tmp_path / "loader_decoy_column.py"
+    module_path.write_text(MISSING_COLUMN_LOADER, encoding="utf-8")
+    module = _import_module(module_path, "drift_demo_decoy_column")
+
+    assert module.load_sales(OLD_CSV) == EXPECTED
+
+    with pytest.raises(Exception):
+        module.load_sales(NEW_CSV_DECOY_NUMERIC)
+
+    healed = _import_module(module_path, "drift_demo_decoy_column_healed")
+    assert healed.load_sales(OLD_CSV) == EXPECTED, "old format broke after healing attempt"

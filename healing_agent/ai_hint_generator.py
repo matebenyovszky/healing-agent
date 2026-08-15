@@ -81,6 +81,7 @@ Based on all the provided context, generate a helpful hint or suggestion for res
 5. The full execution context from the traceback
 
 Provide the hint in a concise and clear manner, avoiding any code snippets or markdown formatting.
+If the error stems from input data whose structure changed, distinguish renamed fields (same business concept under a new name) from genuinely missing required fields. Never suggest substituting an unrelated field (such as an identifier, order number or date) for a missing required field; in that case recommend raising a clear error instead.
 """
     
     # Get the AI-generated hint with analyzer role
