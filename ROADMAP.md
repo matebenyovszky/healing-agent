@@ -40,37 +40,54 @@ Next steps (each one scenario + at most a prompt/context change):
 - **0.2.8 reviewable patch bridge** — minimal candidate replacement without
   reformatting unrelated code, optional `git apply`-consumable patches with
   JSON provenance sidecars, language-neutral text patch support.
-- **0.2.9 guarded Git workflow + Data Healing** — `GIT_MODE=off|patch|apply`
-  with `git apply --check` and source-hash guards; drift-aware prompts and the
-  live data-drift acceptance suite (7 scenarios including adversarial
-  guardrails).
+- **0.2.9 guarded Git workflow + Data Healing spec** — `GIT_MODE=off|patch|apply`
+  with `git apply --check` and source-hash guards; the dependency-free Data
+  Healing design.
+- **0.3.0 Data Healing demonstrated** — 11 live acceptance scenarios (9 heal +
+  2 anti-fabrication guardrails) across CSV, Excel, API, date/locale and
+  pagination drift; drift-aware prompts; decorator-preserving replacement;
+  bounded generation retry.
 
-## Short term: 0.3 — repairs that can be trusted
+## Short term: 0.4 — repairs that can be trusted
 
-1. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
+1. **Function-documented validation tests** — let the application declare
+   which of its own tests validate a supervised function (e.g.
+   `@healing_agent(test_command="pytest tests/test_loader.py")` or
+   `tests=[...]`); after a heal, run them automatically and reject the fix on
+   failure. This is the KISS-compatible verification step: the tests already
+   exist in the host application, Healing Agent only runs them.
+   *Acceptance: a heal that breaks a declared validation test never reaches
+   the source tree.*
+2. **Host-level GitHub flow so fixes are never lost** — turn the already-saved
+   patch + provenance sidecar into a branch, commit, and draft pull request
+   via an explicit host-level script/Action (token stays host-supplied,
+   never in the healed process or LLM context; never pushes to the default
+   branch). This moves verified heals toward production instead of leaving
+   them in `_healing_agent_fixes/`.
+3. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
    proposal, diff, attempts, evidence, artifact paths); `report`/`propose`/
    `verify`/`apply` modes with `apply` as compatibility default; changed-line
    and allowed-path policies. *Acceptance: a failed run raises the original
    error and still leaves a machine-readable repair report.*
-2. **Verify in isolation** — apply candidates in a temp worktree, compile and
+4. **Verify in isolation** — apply candidates in a temp worktree, compile and
    run a configured test command with timeout, replay the failing input plus
    regression cases, reject out-of-scope edits. *Acceptance: no candidate
    reaches the working tree unless every configured gate passes.*
-3. **Business contracts** — optional per-function contracts (invariants,
+5. **Business contracts** — optional per-function contracts (invariants,
    forbidden changes, related tests); executable assertions are authoritative
    over prose. Repairs may never delete or weaken supplied tests.
-4. **Classify before asking an LLM** — separate application bugs from
+6. **Classify before asking an LLM** — separate application bugs from
    transient provider/dependency/environment failures; deterministic recovery
    (retry/backoff/fallback) first; replace direct `AUTO_SYSCHANGE` installs
    with a reviewable, policy-gated dependency proposal.
-5. **Modern provider layer** — small adapter protocol, structured repair
+7. **Modern provider layer** — small adapter protocol, structured repair
    output instead of Markdown parsing, scheduled compatibility matrix with
    published tested model IDs.
-6. **Honest benchmark** — small bug suites including adversarial cases where a
+8. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
    false-fix rate, attempts, latency, cost, and diff size.
 
-## Medium term: 0.4–0.6 — heal LLM applications and agents
+## Medium term: 0.5–0.7 — heal LLM applications and agents
 
 Failure taxonomy: inference (timeouts, refusals, malformed output), tools
 (invalid arguments, schema drift, unavailable servers), control loop (repeated

@@ -5,7 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.9] - Unreleased
+## [0.3.0] - 2026-08-15
+### Added
+- **Data Healing demonstrated**: 11 live acceptance scenarios prove the heal
+  loop adapts loaders to structurally drifted input while old inputs keep
+  working — renamed/reordered CSV headers, reshaped API payloads, date-format
+  drift, an error inside an undecorated helper, three-layer Excel workbook
+  drift, mixed valid/invalid records with preserved quarantine semantics,
+  UTF-8 BOM plus Hungarian decimal locale, and pagination-envelope drift
+- Two anti-fabrication guardrail scenarios: a missing required column and a
+  decoy numeric column must raise a clear error, never invent business data
+- Drift-aware fix and hint prompts: adapt to BOTH old and new structure, map
+  only same-business-concept aliases, normalize name comparisons
+  (case/whitespace/diacritics), require a single-function replacement
+- One bounded retry when a generated fix fails validation, with robust
+  markdown fence stripping and an AST structural check
+- `docs/data-healing.md` describing the prompt+tests approach, the guardrail
+  story, the escalation rule (prompt → context → code), and a determinism note
+
+### Fixed
+- Function replacement no longer drops decorator arguments such as
+  `@healing_agent(MAX_ATTEMPTS=5)`; original decorator lines are preserved
+- A single invalid generation no longer wastes the whole repair attempt
+
+### Changed
+- README and ROADMAP slimmed around the KISS thesis: minimal transparent code,
+  intelligence in the model and prompts, trust in acceptance tests
+
+## [0.2.9] - 2026-08-13
 ### Added
 - Optional repository-aware Git workflow with `GIT_MODE=off|patch|apply`
 - Patch provenance sidecars containing source hashes, repository path, Git HEAD, language, and `git apply --check` status
@@ -29,6 +56,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Kept Data Healing framework-level with no Docling, Fidelis, Pydantic, pandas, or domain-specific core dependency
 
 ## [0.2.7] - 2026-08-13
+### Security
+- Name-based secret redaction (`healing_agent/redactor.py`) applied before any
+  captured context reaches an AI provider or disk; configurable via
+  `REDACT_SECRETS`, `REDACT_EXTRA_PATTERNS`, `REDACT_PLACEHOLDER`
+  (shipped in this release, previously unlisted)
+- Healing-agent internal frame variables (provider config with API keys, raw
+  args/kwargs) are no longer captured into exception context
+
 ### Added
 - Regression tests for bounded repair attempts and exception propagation
 - Standard pytest discovery and a CI test matrix for Python 3.9-3.13
