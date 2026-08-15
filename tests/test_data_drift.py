@@ -157,12 +157,73 @@ def load_sales(csv_text):
     return {"total": total, "customers": sorted(customers)}
 '''
 
+# Encoding/locale drift: the new export arrives with a UTF-8 BOM (which glues
+# onto the first header, "amount") and Hungarian number formatting
+# ("1 200,50" - space thousands separator, decimal comma).
+DECIMAL_LOADER = '''
+import healing_agent
+
+@healing_agent
+def load_sales(csv_text):
+    import csv, io
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    total = 0.0
+    customers = []
+    for r in rows:
+        total += float(r["amount"])
+        customers.append(r["customer"])
+    return {"total": total, "customers": sorted(customers)}
+'''
+
+OLD_CSV_DECIMAL = (
+    "amount,customer,date\n"
+    "1200.50,Alfa Kft,2026-01-15\n"
+    "799.50,Beta Zrt,2026-02-16\n"
+)
+NEW_CSV_BOM_LOCALE = (
+    "﻿amount,customer,date\n"  # ﻿ = UTF-8 BOM glued onto the first header
+    '"1 200,50",Alfa Kft,2026-01-15\n'
+    '"799,50",Beta Zrt,2026-02-16\n'
+)
+EXPECTED_DECIMAL = {"total": 2000.0, "customers": ["Alfa Kft", "Beta Zrt"]}
+
+# The BOM above is an invisible literal; fail loudly if a formatter strips it.
+assert NEW_CSV_BOM_LOCALE.startswith("﻿"), "BOM fixture lost its BOM"
+
+# Pagination-envelope drift: the flat list moved into per-page envelopes with
+# renamed keys; results must be aggregated ACROSS pages.
+OLD_FLAT_API = {
+    "items": [{"name": "Alfa Kft", "price": 1200}, {"name": "Beta Zrt", "price": 800}]
+}
+NEW_PAGED_API = {
+    "page_count": 2,
+    "pages": [
+        {"page": 1, "results": [{"title": "Alfa Kft", "amount": 1200}]},
+        {"page": 2, "results": [{"title": "Beta Zrt", "amount": 800}]},
+    ],
+}
+
+FLAT_API_LOADER = '''
+import healing_agent
+
+@healing_agent
+def summarize_orders(payload):
+    total = 0
+    names = []
+    for item in payload["items"]:
+        total += int(item["price"])
+        names.append(item["name"])
+    return {"total": total, "names": sorted(names)}
+'''
+
 SCENARIOS = [
     ("csv_renamed_headers", CSV_LOADER, "load_sales", OLD_CSV, NEW_CSV_RENAMED, EXPECTED),
     ("csv_reordered_columns", INDEX_LOADER, "load_sales", OLD_CSV, NEW_CSV_REORDERED, EXPECTED),
     ("api_renamed_renested", API_LOADER, "summarize_orders", OLD_PAYLOAD, NEW_PAYLOAD, EXPECTED_API),
     ("date_format_drift", DATE_LOADER, "monthly_totals", OLD_CSV_DATES, NEW_CSV_DATES, EXPECTED_DATES),
     ("error_in_helper_function", HELPER_LOADER, "load_sales", OLD_CSV, NEW_CSV_RENAMED, EXPECTED),
+    ("bom_and_decimal_locale", DECIMAL_LOADER, "load_sales", OLD_CSV_DECIMAL, NEW_CSV_BOM_LOCALE, EXPECTED_DECIMAL),
+    ("paginated_envelope", FLAT_API_LOADER, "summarize_orders", OLD_FLAT_API, NEW_PAGED_API, EXPECTED_API),
 ]
 
 

@@ -37,6 +37,8 @@ business result for the old **and** the new input:
 | Error inside an undecorated helper | fix must adapt at the decorated boundary | ✅ healed |
 | Excel workbook drift (3 layers) | sheet renamed + title rows above header + translated headers | ✅ healed |
 | Mixed valid/invalid records | header drift healed while quarantine semantics preserved | ✅ healed |
+| BOM + decimal locale | UTF-8 BOM on first header + `"1 200,50"` Hungarian numbers | ✅ healed |
+| Pagination envelope | flat `items[]` → per-page `pages[].results[]`, aggregated across pages | ✅ healed |
 | Required column missing entirely | must raise, not fabricate | ✅ guarded |
 | Missing column + decoy numeric column | must not repurpose order numbers as amounts | ✅ guarded |
 

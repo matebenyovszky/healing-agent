@@ -26,9 +26,10 @@ Next steps (each one scenario + at most a prompt/context change):
 
 - [x] Excel workbook drift: renamed sheet + title rows above the header + translated headers (needs a higher `MAX_ATTEMPTS`: opaque path inputs are discovered round by round).
 - [x] Mixed valid/invalid records: header drift healed while quarantine semantics are preserved.
-- [ ] Encoding and locale drift beyond dates (decimal separators, BOM).
-- [ ] Paginated / enveloped API shape changes.
-- [ ] Merged cells and formula-vs-value drift in Excel.
+- [x] Encoding and locale drift: UTF-8 BOM on the first header + Hungarian decimal/thousands format (passed with zero prompt changes).
+- [x] Paginated / enveloped API shape changes: flat list → per-page envelopes, aggregated across pages (passed with zero prompt changes).
+- [ ] Merged cells in Excel — deferred deliberately: forward-filling merged group labels is a semantic assumption that borders on the never-invent-data guardrail; needs a design decision first.
+- [ ] Formula-vs-value drift in Excel — deferred: openpyxl-generated fixtures carry no cached values (`data_only=True` yields `None`), so the real-world case cannot be reproduced without committing binary Excel-saved fixtures.
 - [ ] Related-function context in the fix prompt — only if a scenario empirically fails without it.
 
 ## Released

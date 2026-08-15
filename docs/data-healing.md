@@ -35,8 +35,10 @@ tests.
 | 5 | Error in undecorated helper | fix must adapt at the decorated boundary | heal, both formats work |
 | 6 | Excel workbook drift | sheet renamed + title rows above header + translated headers | heal, both workbooks work |
 | 7 | Mixed valid/invalid records | header drift + malformed rows | heal drift, preserve quarantine semantics |
-| 8 | Required column missing | no honest mapping exists | raise, never fabricate |
-| 9 | Missing column + decoy numeric column | order numbers ≠ amounts | raise, never fabricate |
+| 8 | BOM + decimal locale | UTF-8 BOM on first header + `"1 200,50"` numbers | heal, both formats work |
+| 9 | Pagination envelope | flat list → per-page envelopes, renamed keys | heal, aggregate across pages |
+| 10 | Required column missing | no honest mapping exists | raise, never fabricate |
+| 11 | Missing column + decoy numeric column | order numbers ≠ amounts | raise, never fabricate |
 
 The tests write each loader to a temp module, run the old input (must work
 untouched), run the drifted input (triggers healing), then re-import the healed
@@ -92,6 +94,18 @@ Candidate scenarios worth adding next: Excel workbooks (sheet renames, moved
 header rows, merged cells), encoding drift, multi-record quarantine (mixed
 valid/invalid rows), paginated API shape changes, and drift in functions with
 multiple data sources.
+
+## Determinism note
+
+Live scenarios are probabilistic: the same scenario can pass one run and miss
+the next, because repair quality depends on the model's generation. Observed
+per-scenario convergence with `gpt-4o-mini` is roughly 85–95% per run. A failed
+round is a convergence miss, not a broken framework — rerun it, raise
+`MAX_ATTEMPTS`, or use a stronger model for higher first-pass rates. The
+guardrail expectations (never fabricate, old format keeps working) have been
+stable across every observed run; treat a guardrail failure — unlike a
+convergence miss — as a real regression. The planned benchmark (see ROADMAP)
+will turn these anecdotal rates into measured repair/false-fix statistics.
 
 ## Guardrails (non-negotiable)
 
