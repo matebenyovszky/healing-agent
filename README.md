@@ -35,6 +35,8 @@ business result for the old **and** the new input:
 | API payload reshaped | `data.items[].name/price` → `result.records[].title/amount` | ✅ healed |
 | Date format drift | `2026-01-15` → `15.01.2026` | ✅ healed |
 | Error inside an undecorated helper | fix must adapt at the decorated boundary | ✅ healed |
+| Excel workbook drift (3 layers) | sheet renamed + title rows above header + translated headers | ✅ healed |
+| Mixed valid/invalid records | header drift healed while quarantine semantics preserved | ✅ healed |
 | Required column missing entirely | must raise, not fabricate | ✅ guarded |
 | Missing column + decoy numeric column | must not repurpose order numbers as amounts | ✅ guarded |
 

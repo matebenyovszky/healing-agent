@@ -141,9 +141,27 @@ def build_replacement_source(
         return None
 
     source_lines = source.splitlines(keepends=True)
-    replacement = fixed_code.rstrip() + '\n'
+
+    # Preserve the ORIGINAL decorator lines: they may carry arguments such as
+    # @healing_agent(MAX_ATTEMPTS=5) that the generated replacement does not
+    # know about. Drop any healing_agent decorator the generated code brought
+    # along so the original one is not duplicated.
+    original_decorator_lines = source_lines[start_line - 1 : node.lineno - 1]
+    original_has_healing = any(
+        line.strip().startswith('@healing_agent') for line in original_decorator_lines
+    )
+    fixed_lines = fixed_code.rstrip().splitlines()
+    while (
+        original_has_healing
+        and fixed_lines
+        and fixed_lines[0].strip().startswith('@healing_agent')
+    ):
+        fixed_lines.pop(0)
+    replacement = '\n'.join(fixed_lines) + '\n'
+
     new_source = ''.join(
         source_lines[: start_line - 1]
+        + original_decorator_lines
         + [replacement]
         + source_lines[end_line:]
     )

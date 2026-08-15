@@ -266,3 +266,134 @@ def test_decoy_numeric_column_is_not_mistaken_for_amount(tmp_path):
 
     healed = _import_module(module_path, "drift_demo_decoy_column_healed")
     assert healed.load_sales(OLD_CSV) == EXPECTED, "old format broke after healing attempt"
+
+
+# --- Excel workbook drift ------------------------------------------------------
+# Three drift layers at once: the sheet was renamed, title/empty rows appeared
+# above the header row, and the headers themselves were translated.
+#
+# Unlike the CSV scenarios, the function argument is only a PATH: the model
+# cannot see the drifted content up front. Each repair round discovers more
+# (sheet names -> title row -> actual headers) through its own error messages,
+# so the attempt budget must scale with the number of drift layers.
+
+EXCEL_LOADER = '''
+import healing_agent
+
+@healing_agent(MAX_ATTEMPTS=5)
+def load_sales(xlsx_path):
+    import openpyxl
+    wb = openpyxl.load_workbook(xlsx_path)
+    ws = wb["Sales"]
+    rows = list(ws.iter_rows(values_only=True))
+    headers = list(rows[0])
+    total = 0
+    customers = []
+    for row in rows[1:]:
+        rec = dict(zip(headers, row))
+        total += int(rec["amount"])
+        customers.append(rec["customer"])
+    return {"total": total, "customers": sorted(customers)}
+'''
+
+
+def _write_workbook(path, sheet_name, prefix_rows, headers, data_rows):
+    import openpyxl
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = sheet_name
+    for row in prefix_rows:
+        ws.append(row)
+    ws.append(headers)
+    for row in data_rows:
+        ws.append(row)
+    wb.save(path)
+
+
+def test_excel_workbook_drift(tmp_path):
+    pytest.importorskip("openpyxl")
+
+    old_xlsx = tmp_path / "sales_old.xlsx"
+    new_xlsx = tmp_path / "sales_new.xlsx"
+    _write_workbook(
+        old_xlsx, "Sales", [],
+        ["date", "customer", "amount"],
+        [["2026-01-15", "Alfa Kft", 1200], ["2026-02-16", "Beta Zrt", 800]],
+    )
+    _write_workbook(
+        new_xlsx, "Ertekesites 2026",
+        [["Havi ertekesitesi riport", None, None], [None, None, None]],
+        ["datum", "ugyfel", "osszeg"],
+        [["2026-01-15", "Alfa Kft", 1200], ["2026-02-16", "Beta Zrt", 800]],
+    )
+
+    module_path = tmp_path / "loader_excel_drift.py"
+    module_path.write_text(EXCEL_LOADER, encoding="utf-8")
+    module = _import_module(module_path, "drift_demo_excel")
+
+    assert module.load_sales(str(old_xlsx)) == EXPECTED
+
+    result = module.load_sales(str(new_xlsx))
+    assert result == EXPECTED, f"healed call on drifted workbook returned {result!r}"
+
+    healed = _import_module(module_path, "drift_demo_excel_healed")
+    assert healed.load_sales(str(old_xlsx)) == EXPECTED, "old workbook broke after healing"
+    assert healed.load_sales(str(new_xlsx)) == EXPECTED, "new workbook not handled after healing"
+
+
+# --- Quarantine semantics -------------------------------------------------------
+# The original contract already quarantines malformed rows instead of failing
+# the whole batch. Healing the header drift must PRESERVE that semantics:
+# unmappable/invalid rows stay rejected, and are never fabricated into results.
+
+QUARANTINE_LOADER = '''
+import healing_agent
+
+@healing_agent
+def load_sales(csv_text):
+    import csv, io
+    rows = list(csv.DictReader(io.StringIO(csv_text)))
+    total = 0
+    customers = []
+    rejected = 0
+    for r in rows:
+        try:
+            total += int(r["amount"])
+            customers.append(r["customer"])
+        except (ValueError, TypeError):
+            rejected += 1  # quarantine malformed rows, keep processing
+    return {"total": total, "customers": sorted(customers), "rejected": rejected}
+'''
+
+# Renamed headers AND two malformed rows (non-numeric / empty amount).
+# Distinct customer names on the bad rows: if healing fabricates amounts
+# (e.g. treats N/A as 0), those names would appear and the assertion fails.
+NEW_CSV_MIXED = (
+    "datum,ugyfel,osszeg\n"
+    "2026-01-15,Alfa Kft,1200\n"
+    "2026-01-20,Gamma Bt,N/A\n"
+    "2026-02-16,Beta Zrt,800\n"
+    "2026-02-20,Delta Kkt,\n"
+)
+
+EXPECTED_Q_OLD = {"total": 2000, "customers": ["Alfa Kft", "Beta Zrt"], "rejected": 0}
+EXPECTED_Q_NEW = {"total": 2000, "customers": ["Alfa Kft", "Beta Zrt"], "rejected": 2}
+
+
+def test_mixed_records_are_quarantined_not_fabricated(tmp_path):
+    module_path = tmp_path / "loader_quarantine.py"
+    module_path.write_text(QUARANTINE_LOADER, encoding="utf-8")
+    module = _import_module(module_path, "drift_demo_quarantine")
+
+    # Old format, all rows valid.
+    assert module.load_sales(OLD_CSV) == EXPECTED_Q_OLD
+
+    # Drifted headers + malformed rows: healing must map the headers while
+    # keeping quarantine semantics for the two bad rows.
+    result = module.load_sales(NEW_CSV_MIXED)
+    assert result == EXPECTED_Q_NEW, f"healed call returned {result!r}"
+
+    healed = _import_module(module_path, "drift_demo_quarantine_healed")
+    assert healed.load_sales(OLD_CSV) == EXPECTED_Q_OLD, "old format broke after healing"
+    assert healed.load_sales(NEW_CSV_MIXED) == EXPECTED_Q_NEW, "quarantine semantics lost after healing"

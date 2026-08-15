@@ -1,3 +1,4 @@
+import ast
 import re
 from typing import Dict, Any
 from .ai_broker import get_ai_response
@@ -92,10 +93,12 @@ Error Line: {context['error'].get('error_line')}
 {func_info}{arg_info}{ai_hint}
 
 Return only the fixed code without any explanations or markdown formatting.
+Return exactly ONE top-level function definition. Place any imports and helper functions INSIDE the function body, never at module level.
 Ensure the fixed code maintains the same function name and signature.
 Add appropriate error handling where necessary.
 If the error was caused by input data whose structure changed (renamed columns or fields, different column order, changed nesting or format), adapt the code so it handles BOTH the previous and the new structure — e.g. inspect the actual headers/fields at runtime and map known aliases — instead of hardcoding one layout.
 Map fields only by names that are synonyms or translations of the SAME business concept as the expected field. An identifier, order number, code, date or other unrelated field is NEVER a valid alias for a required field (such as an amount), even if its values have a compatible type. Do not add a field to an alias mapping merely because it appears in the current input's headers.
+When comparing header/field names, always compare normalized forms: lowercase, trimmed, and accent/diacritic-insensitive (e.g. strip diacritics with unicodedata), because real-world data varies in casing, whitespace and accents.
 Never invent values for missing required business data; raise a clear error when a required field cannot be confidently identified or a record cannot be mapped.
 """
 
@@ -149,23 +152,47 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     try:
         # Prepare the prompt for AI
         prompt = prepare_fix_prompt(context)
-        
-        # Get the fix from AI with code_fixer role
-        fixed_code = get_ai_response(prompt, config, "code_fixer")
 
-        # Remove markdown code block formatting if present
-        fixed_code = re.sub(r'^```python\n|^```\n|```$', '', fixed_code, flags=re.MULTILINE)
-        
-        # Ensure healing_agent decorator is present
-        fixed_code = ensure_healing_agent_decorator(fixed_code)
-        
-        # Validate the fixed code
-        if validate_fixed_code(fixed_code):
+        # Generation is non-deterministic: validate, and retry once on an
+        # invalid candidate instead of giving up the whole repair attempt.
+        for generation_attempt in range(2):
+            fixed_code = get_ai_response(prompt, config, "code_fixer")
 
-            return fixed_code
-        else:
-            print("♣ Generated fix failed validation")
-            return
+            # Remove markdown code fences robustly (```python, ```py, ``` …)
+            fixed_code = fixed_code.strip()
+            fixed_code = re.sub(r'^```[a-zA-Z0-9_-]*[ \t]*\r?\n', '', fixed_code)
+            fixed_code = re.sub(r'\r?\n```[ \t]*$', '', fixed_code)
+
+            # Structural check BEFORE decorating: the replacement must be a
+            # single function definition (helpers/imports nested inside),
+            # otherwise prepending @healing_agent would decorate an import
+            # and the file replacer could not splice it anyway.
+            try:
+                parsed = ast.parse(fixed_code)
+                single_function = len(parsed.body) == 1 and isinstance(
+                    parsed.body[0], (ast.FunctionDef, ast.AsyncFunctionDef)
+                )
+            except SyntaxError:
+                single_function = True  # let validate_fixed_code report it
+            if not single_function:
+                print(
+                    "♣ Generated code is not a single function definition"
+                    + (", retrying once" if generation_attempt == 0 else "")
+                )
+                continue
+
+            # Ensure healing_agent decorator is present
+            fixed_code = ensure_healing_agent_decorator(fixed_code)
+
+            # Validate the fixed code
+            if validate_fixed_code(fixed_code):
+                return fixed_code
+
+            print(
+                "♣ Generated fix failed validation"
+                + (", retrying once" if generation_attempt == 0 else "")
+            )
+        return
 
     except Exception as e:
         print(f"♣ Error during code fixing: {str(e)}")

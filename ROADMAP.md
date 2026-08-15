@@ -24,10 +24,11 @@ for the approach, the adversarial guardrail story, and the escalation rule
 
 Next steps (each one scenario + at most a prompt/context change):
 
-- [ ] Excel workbook drift: sheet renames, moved header rows, merged cells.
+- [x] Excel workbook drift: renamed sheet + title rows above the header + translated headers (needs a higher `MAX_ATTEMPTS`: opaque path inputs are discovered round by round).
+- [x] Mixed valid/invalid records: header drift healed while quarantine semantics are preserved.
 - [ ] Encoding and locale drift beyond dates (decimal separators, BOM).
-- [ ] Mixed valid/invalid records: quarantine semantics instead of all-or-nothing.
 - [ ] Paginated / enveloped API shape changes.
+- [ ] Merged cells and formula-vs-value drift in Excel.
 - [ ] Related-function context in the fix prompt — only if a scenario empirically fails without it.
 
 ## Released

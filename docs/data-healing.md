@@ -33,8 +33,10 @@ tests.
 | 3 | API payload reshaped | keys renamed + renested | heal, both formats work |
 | 4 | Date format drift | ISO → `DD.MM.YYYY` | heal, both formats work |
 | 5 | Error in undecorated helper | fix must adapt at the decorated boundary | heal, both formats work |
-| 6 | Required column missing | no honest mapping exists | raise, never fabricate |
-| 7 | Missing column + decoy numeric column | order numbers ≠ amounts | raise, never fabricate |
+| 6 | Excel workbook drift | sheet renamed + title rows above header + translated headers | heal, both workbooks work |
+| 7 | Mixed valid/invalid records | header drift + malformed rows | heal drift, preserve quarantine semantics |
+| 8 | Required column missing | no honest mapping exists | raise, never fabricate |
+| 9 | Missing column + decoy numeric column | order numbers ≠ amounts | raise, never fabricate |
 
 The tests write each loader to a temp module, run the old input (must work
 untouched), run the drifted input (triggers healing), then re-import the healed
@@ -55,6 +57,24 @@ This is the working loop for evolving Data Healing:
 ```text
 adversarial test fails -> smallest prompt change -> full suite re-run -> keep the test forever
 ```
+
+Further lessons the scenarios taught us:
+
+- **Attempt budget scales with drift layers on opaque inputs.** When the
+  function argument is a file *path* (Excel) rather than the content itself
+  (CSV text), the model cannot see the drifted structure up front. Each repair
+  round discovers more through its own error messages (sheet names → title
+  row → actual headers), so multi-layer drift needs a higher `MAX_ATTEMPTS`
+  — the iterative evidence-gathering is a feature, not a failure.
+- **Normalize name comparisons.** The Excel run initially failed because the
+  model matched the accented Hungarian `összeg` while the file used the
+  unaccented `osszeg`. One prompt sentence (compare lowercase, trimmed,
+  diacritic-stripped forms) fixed it permanently.
+- **Constrain the output contract.** A prompt improvement pushed the model to
+  emit module-level helper functions and imports, which the single-function
+  replacer cannot splice. One prompt sentence (exactly one function; helpers
+  and imports inside the body) plus a structural check with one retry made
+  generation robust.
 
 ## How to extend
 
