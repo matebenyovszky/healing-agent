@@ -94,6 +94,8 @@ Error Line: {context['error'].get('error_line')}
 Return only the fixed code without any explanations or markdown formatting.
 Ensure the fixed code maintains the same function name and signature.
 Add appropriate error handling where necessary.
+If the error was caused by input data whose structure changed (renamed columns or fields, different column order, changed nesting or format), adapt the code so it handles BOTH the previous and the new structure — e.g. inspect the actual headers/fields at runtime and map known aliases — instead of hardcoding one layout.
+Never invent values for missing required business data; raise a clear error for records that cannot be mapped.
 """
 
 def validate_fixed_code(fixed_code: str) -> bool:
