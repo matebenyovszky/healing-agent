@@ -95,17 +95,30 @@ genuinely transactional apply semantics (snapshots, multi-file atomicity).
 Verify-only also removes the trust problem entirely: healing-agent performs
 the write itself, so no external "ok" has to be believed.
 
-## RESTORE on definitive failure
+## What happens on definitive failure — implemented ✅ (restore) + planned
 
-Backups already exist (`BACKUP_ENABLED`, timestamped copies per attempt) but
-0.3 never restores them: the in-memory module is rolled back, the file is not.
-0.4 closes this: when healing ends in failure after the live file was mutated
-— `MAX_ATTEMPTS` exhausted, or a post-apply gate failed — healing-agent
-restores the FIRST backup of the healing session (the pre-healing original),
-so the working tree is exactly as it was, and re-raises the original
-exception. No half-healed files are ever left behind.
-*Acceptance: after any failed healing session, the source file is
-byte-identical to its pre-healing state.*
+Healing ends definitively when `MAX_ATTEMPTS` is exhausted, the repaired
+module still fails, a gate rejects the candidate, or `AUTO_FIX=False`. The
+sequence is:
+
+1. **RESTORE the sources** (`RESTORE_ON_FAILURE=True`, default) — the FIRST
+   backup of the healing session holds the pre-healing original; it is copied
+   back, so the working tree is exactly as it was. Attempts nest (a repaired
+   function that fails again re-enters the decorator), so only the outermost
+   invocation owns the session and restores. The generated candidates stay
+   available under `_healing_agent_fixes/`; `False` keeps the mutated file for
+   inspection instead.
+   *Acceptance: after any failed healing session, the source file is
+   byte-identical to its pre-healing state.* — **shipped in 0.4 groundwork**
+2. **Escalate as plan B** (`GITHUB["issue_on_failure"]`, planned) — open a
+   GitHub issue describing the failure at the configured detail level, so the
+   attempt is not silently lost: an external agent or a human can answer with
+   a PR that flows through the normal `pr-checks` path. This is the same
+   escalation as the `issue` PROPOSE backend, only triggered AFTER local
+   healing gave up rather than instead of it.
+3. **Re-raise the original application exception** — always, unchanged. A
+   failed repair never becomes an implicit `None`, and an opened issue is
+   never treated as a fix.
 
 ## The PR flow in detail (standard Git machinery only)
 

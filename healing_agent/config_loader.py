@@ -136,7 +136,7 @@ def validate_config(config):
             if not isinstance(config.get(bool_setting), bool):
                 raise ValueError(f"{bool_setting} must be a boolean value")
 
-        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES', 'GIT_STAGE']:
+        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES', 'GIT_STAGE', 'RESTORE_ON_FAILURE']:
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
 

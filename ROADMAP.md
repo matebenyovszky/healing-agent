@@ -79,12 +79,21 @@ automatic restore on definitive failure. See the full specification in
    default branch. *Acceptance: a scheduled job broken by drift at night has
    a CI-verified, merged fix and a successful re-run by morning, with zero
    bespoke test configuration.*
-4. **Restore on definitive failure** — backups exist since forever but are
-   never auto-restored; when healing ends in failure after the live file was
-   mutated (`MAX_ATTEMPTS` exhausted or a post-apply gate failed), restore
-   the session's first backup and re-raise the original exception.
-   *Acceptance: after any failed healing session the source file is
-   byte-identical to its pre-healing state.*
+4. **Definitive-failure sequence** — what happens once healing gives up
+   (`MAX_ATTEMPTS` exhausted, repaired module still failing, gate rejection,
+   or `AUTO_FIX=False`):
+   - [x] **Restore the source** (`RESTORE_ON_FAILURE`, default on): the
+         session's first backup — the pre-healing original — is copied back,
+         so no half-healed file is left behind; candidates stay in
+         `_healing_agent_fixes/`. *Acceptance: after any failed healing
+         session the source file is byte-identical to its pre-healing state.*
+   - [ ] **Escalate as plan B** (`GITHUB["issue_on_failure"]`): open a GitHub
+         issue at the configured detail level so the failed attempt is not
+         lost — an external agent or a human answers with a PR that flows
+         through `pr-checks`. Same mechanism as the `issue` PROPOSE backend,
+         but triggered after local healing gave up rather than instead of it.
+   - [x] **Re-raise the original exception**, always — a failed repair never
+         becomes an implicit `None`, and an opened issue is never a fix.
 5. **One subprocess boundary for everything external** — fix generation
    (`PROPOSE` via external bot/harness returning `fixed_code`), verification
    (`command` gate), external apply (`APPLY="command"`, the community

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- `RESTORE_ON_FAILURE` (default `True`): when healing fails definitively
+  (`MAX_ATTEMPTS` exhausted, repaired module still failing, or an invalid
+  candidate) the pre-healing source is restored from the healing session's
+  first backup, so no half-healed file is left behind. Generated candidates
+  remain available under `_healing_agent_fixes/`
+- `GITHUB` configuration block as groundwork for issue escalation and the PR
+  delivery flow; it stores only the NAME of the token environment variable,
+  never a token value
+- `docs/apply-verify-design.md`: the 0.4 propose → verify → apply pipeline
+  specification (unified response envelope, verify gates, APPLY policies,
+  repository-CI gate, issue escalation with privacy levels)
+
+### Fixed
+- Code backups taken within the same second no longer overwrite each other;
+  backup filenames now carry microsecond precision. Previously a second
+  repair attempt could destroy the backup holding the original source
+
 ## [0.3.0] - 2026-08-15
 ### Added
 - **Data Healing demonstrated**: 11 live acceptance scenarios prove the heal

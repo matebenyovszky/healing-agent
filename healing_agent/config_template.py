@@ -73,6 +73,11 @@ SYSTEM_PROMPTS = {
 # Backup and Storage Configuration
 # -----------------------------
 BACKUP_ENABLED = True  # Enable code backups before fixes
+# When healing ends in definitive failure (MAX_ATTEMPTS exhausted or the
+# repaired module still fails) restore the pre-healing source from the backup,
+# so no half-healed file is left behind. The generated candidate is still kept
+# under _healing_agent_fixes/. Requires BACKUP_ENABLED=True.
+RESTORE_ON_FAILURE = True
 SAVE_EXCEPTIONS = True  # Save exception contexts for analysis
 SAVE_AI_FIXES = True  # New parameter to control saving AI code suggestions
 SAVE_GIT_PATCHES = False  # Optionally emit a reviewable `git apply` patch

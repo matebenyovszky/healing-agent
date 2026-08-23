@@ -127,6 +127,7 @@ DEBUG = True              # Detailed logging
 AUTO_FIX = True           # Apply and execute generated fixes
 AUTO_SYSCHANGE = False    # Never install packages automatically (keep False)
 BACKUP_ENABLED = True     # Back up sources before fixes
+RESTORE_ON_FAILURE = True # Roll the source back when healing definitively fails
 SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
 GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded git apply)
@@ -143,7 +144,7 @@ AZURE = {
 }
 ```
 
-Model IDs are configurable, not hardcoded. If a repaired module fails to load, the previous module object is restored in `sys.modules`; the edited source file is recoverable from backups and version control.
+Model IDs are configurable, not hardcoded. If a repaired module fails to load, the previous module object is restored in `sys.modules`. When healing fails definitively — `MAX_ATTEMPTS` exhausted, or the repaired module still failing — `RESTORE_ON_FAILURE=True` (the default) also rolls the **source file** back to its pre-healing state, so no half-healed code is left behind; the generated candidate stays available under `_healing_agent_fixes/`. Set it to `False` to keep the mutated file for inspection.
 
 ### Reviewable Git patches (optional)
 

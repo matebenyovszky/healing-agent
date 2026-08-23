@@ -1,12 +1,12 @@
 from contextvars import ContextVar
 from functools import wraps
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, Optional
 
 from .agent_tools.tool_install_missing_module import install_missing_module
 from .ai_code_fixer import fix
 from .ai_fix_saver import save_ai_fix
 from .ai_hint_generator import generate_hint
-from .code_backup import create_backup
+from .code_backup import create_backup, restore_backup
 from .code_replacer import function_replacer
 from .config_loader import load_config
 from .exception_handler import capture_context
@@ -19,10 +19,33 @@ _repair_attempts: ContextVar[Dict[str, int]] = ContextVar(
     "healing_agent_repair_attempts", default={}
 )
 
+# Tracks the outermost healing session so a definitive failure can restore the
+# pre-healing sources. Repair attempts nest (a repaired function that fails
+# again re-enters the decorator), so only the outermost invocation owns the
+# session and performs the restore.
+_healing_session: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
+    "healing_agent_session", default=None
+)
+
 
 def _repair_key(func: Callable[..., Any]) -> str:
     """Return a stable key across reloads of the decorated function."""
     return f"{func.__module__}:{func.__qualname__}"
+
+
+def _register_backup(file_path: str, backup_path: Optional[str]) -> None:
+    """Remember the FIRST backup taken per file in this healing session."""
+    session = _healing_session.get()
+    if session is None or not backup_path or not file_path:
+        return
+    session["backups"].setdefault(file_path, backup_path)
+
+
+def _restore_session_sources(session: Dict[str, Any]) -> None:
+    """Undo every file mutation performed during a failed healing session."""
+    for file_path, backup_path in session["backups"].items():
+        if restore_backup(backup_path, file_path):
+            print(f"♣ Restored {file_path} from {backup_path} after failed healing.")
 
 
 def healing_agent(
@@ -34,9 +57,22 @@ def healing_agent(
             try:
                 return func(*args, **kwargs)
             except Exception as original_error:
+                # The outermost invocation owns the healing session and is the
+                # only one allowed to restore sources, because repair attempts
+                # nest through the reloaded, still-decorated function.
+                session = _healing_session.get()
+                session_token = None
+                if session is None:
+                    session = {"backups": {}, "restore_enabled": True}
+                    session_token = _healing_session.set(session)
+                healed_successfully = False
                 try:
                     config, _ = load_config()
                     config.update(local_config)
+                    if session_token is not None:
+                        session["restore_enabled"] = bool(
+                            config.get("RESTORE_ON_FAILURE", True)
+                        )
 
                     repair_key = _repair_key(func)
                     attempts = _repair_attempts.get()
@@ -70,6 +106,7 @@ def healing_agent(
                             max_attempts,
                         )
                         if healed:
+                            healed_successfully = True
                             return result
                     finally:
                         _repair_attempts.reset(token)
@@ -78,6 +115,13 @@ def healing_agent(
                         raise
                     print(f"♣ Healing failed: {healing_error}")
                     raise original_error from healing_error
+                finally:
+                    # A definitive failure must not leave a half-healed source
+                    # file behind; the candidate stays in _healing_agent_fixes/.
+                    if session_token is not None:
+                        if not healed_successfully and session["restore_enabled"]:
+                            _restore_session_sources(session)
+                        _healing_session.reset(session_token)
 
                 # AUTO_FIX=False, an invalid proposal, or an unavailable reload
                 # must never turn an application failure into an implicit None.
@@ -188,6 +232,9 @@ def _attempt_healing(
     if config.get("BACKUP_ENABLED", True):
         saved_backup = create_backup(context)
         context["backup_path"] = saved_backup
+        # Only the first backup per file is kept: it holds the pre-healing
+        # source that a failed session must be restored to.
+        _register_backup(context["error"]["file"], saved_backup)
         if config.get("DEBUG"):
             print(f"♣ Created backup in backup folder: {saved_backup}")
 
