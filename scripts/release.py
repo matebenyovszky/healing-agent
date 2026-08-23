@@ -163,7 +163,7 @@ def main() -> None:
     build(version)
 
     if not args.publish:
-        print(f"\nPreflight green. Publish with:  python scripts/release.py --publish\n")
+        print("\nPreflight green. Publish with:  python scripts/release.py --publish\n")
         return
     publish(version)
 
