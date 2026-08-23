@@ -29,14 +29,9 @@ external.
 
 The command form lets an organization plug in its own repair harness
 (a stronger agent, a fine-tuned model, a rule engine) without healing-agent
-learning anything about it. The response can take three forms — inline code
-is the v1 contract, the others are planned extensions:
-
-- `{"fixed_code": "def ..."}` — inline candidate (v1);
-- `{"fixed_code_path": "/tmp/candidate.py"}` — the harness wrote the
-  candidate to a file;
-- `{"branch": "healing/fix-..."}` — the harness pushed a branch (or opened a
-  PR); healing-agent fetches the candidate from there.
+learning anything about it. Its response uses the unified envelope (below)
+with a required `candidate`; inline code is the v1 contract, path and branch
+are planned extensions.
 
 ## VERIFY — ordered gates, all must pass
 
@@ -134,6 +129,24 @@ speaking the same versioned JSON-over-stdin protocol family
 hook). The first-party PR backend is simply a `gh`-based script on that
 boundary — the first of hopefully many backends. The subprocess boundary is
 also a dependency and license boundary: external engines stay external.
+
+### Unified response envelope (every stage, one parser)
+
+```json
+{"ok": true,
+ "error": "only when not ok",
+ "candidate": {"code": "..."} | {"path": "..."} | {"branch": "..."}}
+```
+
+- **PROPOSE**: `ok` + `candidate` required — the candidate IS the answer.
+- **VERIFY**: the exit code alone decides pass/fail; the envelope is optional
+  structured detail. A verifier MAY return a `candidate` meaning "passed,
+  but in this canonicalized form" (e.g. an AST engine re-serializing the
+  patch). Guardrail: a gate that returns a NEW candidate restarts the chain
+  from the first gate with it, counted against the attempt budget —
+  otherwise gate ordering could be bypassed.
+- **APPLY**: `ok` = the change landed; `candidate.branch` (plus e.g. a PR
+  URL) says where — the PR delivery backend's response is this same envelope.
 
 ## Division of labor
 
