@@ -13,6 +13,7 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 - 🚨 Automatic error detection with rich context capture (source, args, variables, traceback)
 - 💡 AI-generated fixing hints and repaired code, multi-provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM)
 - 📊 **Data Healing**: adapts loaders to structurally drifted input while old inputs keep working (see below)
+- 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
 - 🔒 Secret redaction before anything is sent to a provider or written to disk
 - 💾 Backups before every fix, exception context saved to JSON, optional reviewable `git apply` patches
 - 🔧 Zero-config integration: import, decorate, run
@@ -154,7 +155,11 @@ LOG_BUFFER_SIZE = 50          # in your config; 0 or absent = never installed
 healing_agent.enable_log_capture()   # arm it at startup, while the program is healthy
 ```
 
-A ring buffer can only hold what was recorded *before* the failure, so it has to be armed early. ⚠️ Log messages are free text, so name-based redaction cannot see inside them — `logger.info(f"token={t}")` would reach the provider. Keep it off unless you trust your log messages.
+A ring buffer can only hold what was recorded *before* the failure, so it has to be armed early; `healing_agent.disable_log_capture()` removes it again. Records are level-filtered (`LOG_BUFFER_LEVEL`) and individually length-capped, and lowering `LOG_BUFFER_SIZE` immediately lowers how many are sent.
+
+⚠️ Log messages are free text, so name-based redaction cannot see inside them — `logger.info(f"token={t}")` would reach the provider. Keep it off unless you trust your log messages.
+
+**What is *not* sent:** the captured `variables` block (locals and globals — about 2.5 KB of a typical 8 KB context) is saved to disk but deliberately never included in a prompt, because it would roughly double the ~990-token fix prompt on every nested attempt. Giving the model tools to *request* specific variables or log lines instead is [ROADMAP](ROADMAP.md) item 7.
 
 ## Configuration ⚙️
 
@@ -174,6 +179,11 @@ RESTORE_ON_FAILURE = True # Roll the source back when healing definitively fails
 SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
 GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded git apply)
+
+# Observation (see "Observing without a failure" above)
+LOG_BUFFER_SIZE = 0       # 0 or absent = ring buffer never installed; N = keep and send N records
+LOG_BUFFER_LEVEL = "INFO" # Minimum level the buffer records
+CAPTURE_DIR = None        # Where capture() writes; None = next to the calling module
 ```
 
 Provider example (Azure OpenAI):
@@ -188,6 +198,27 @@ AZURE = {
 ```
 
 Model IDs are configurable, not hardcoded. If a repaired module fails to load, the previous module object is restored in `sys.modules`. When healing fails definitively — `MAX_ATTEMPTS` exhausted, or the repaired module still failing — `RESTORE_ON_FAILURE=True` (the default) also rolls the **source file** back to its pre-healing state, so no half-healed code is left behind; the generated candidate stays available under `_healing_agent_fixes/`. Set it to `False` to keep the mutated file for inspection.
+
+### Sampling parameters and comparing models
+
+Every provider block takes an optional `params` dict, forwarded to that provider **verbatim** — request keyword arguments for Azure, OpenAI, Anthropic and LiteLLM, and Ollama's `options` object for local models. Nothing is validated or translated: parameter names belong to the provider. Leave it empty and the request is exactly what earlier releases sent.
+
+```python
+OLLAMA = {
+    "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+    "model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+    "timeout": 300,                       # local models are slower than APIs
+    "params": {"temperature": 0.2, "seed": 7, "num_ctx": 8192},
+}
+```
+
+`AI_PROVIDER` reads `HEALING_AGENT_PROVIDER` from the environment, so the same config can be swept across providers without being edited:
+
+```bash
+HEALING_AGENT_PROVIDER=ollama OLLAMA_MODEL=qwen2.5-coder:32b python -m pytest tests/test_data_drift.py -v
+```
+
+With `DEBUG = True` each healing session reports what it spent — `♣ Model usage: 3 model call(s), 41.2s, tokens in/out: 5120/860` — and the same summary is written into the saved fix artifact. Only counts are recorded, never prompts. If a repair fails on a small local model, rule out a too-small `num_ctx` (which truncates the captured evidence silently) before concluding the model cannot do it. See [docs/benchmark.md](docs/benchmark.md) for the planned model × parameter × prompt matrix.
 
 ### Reviewable Git patches (optional)
 
