@@ -6,19 +6,62 @@ already rewritten. 0.4 inverts this and makes the whole pipeline explicit
 policy — three swappable stages behind one external boundary:
 
 ```text
-exception → capture + redact
+OBSERVE    (capture context — on an exception OR at an explicit point)
         → PROPOSE  (who writes the fix)
         → VERIFY   (ordered gates, all must pass — BEFORE the live file changes)
         → APPLY    (where the accepted candidate lands)
         → on definitive failure: RESTORE the pre-healing source from backup,
-          re-raise the original exception
+          optionally escalate, re-raise the original exception
 ```
 
 The guiding principle stays KISS: healing-agent builds no repair, test, or
 sandbox infrastructure of its own. It orchestrates things that already exist —
 the AI provider, the Python compiler, the application's own tests, the
-repository's own CI — and exposes ONE subprocess/JSON boundary for everything
-external.
+repository's own CI, the application's own logger — and exposes ONE
+subprocess/JSON boundary for everything external.
+
+## OBSERVE — capture without a failure
+
+`capture_context()` already accepts `error=None` and tags the result
+`capture_type: "debug"`, but nothing exposes it. Observation deserves to be a
+first-class stage, because the same evidence that powers a repair is valuable
+on its own: knowing every variable at the moment an API call returned
+something unexpected is often the whole debugging session.
+
+| Mode | Behavior |
+|---|---|
+| `off` (default) | context is captured only when an exception occurs |
+| `capture` | `healing_agent.capture(label="after-fetch")` writes a redacted context snapshot at any point in the code; no AI call, no mutation |
+| `probe` | run a configured call (e.g. the API request described in config) and save its context — a self-test that answers "what does this integration actually return today?" |
+
+Where snapshots go is the same one-boundary decision as everywhere else
+(`CAPTURE_SINK`): the local `_healing_agent_exceptions/` directory by default,
+a command for anything else (ship to object storage, a log pipeline, a
+ticket), or `issue` to attach it to a GitHub issue. Redaction runs before any
+sink, exactly as it does for failures.
+
+Observation also makes the drift story proactive rather than reactive: a
+`probe` snapshot taken nightly against a supplier's API shows the structure
+changing *before* a loader raises.
+
+## Logging — connect to the application's own logger
+
+healing-agent prints today. Two connections are worth having, and both use
+Python's standard `logging`, so no third-party logger becomes a dependency:
+
+- **Outward:** emit through `logging.getLogger("healing_agent")` so the host
+  application decides where healing output goes. Standard-library `logging`
+  is the interoperability point everyone already has: loguru users install
+  their documented `InterceptHandler`, structlog wraps stdlib, and plain
+  `logging.basicConfig()` just works. Printing stays the fallback when the
+  application configured no handler, so current behavior is preserved.
+- **Inward (the more valuable direction):** attach a small ring-buffer
+  `logging.Handler` that keeps the last N records, and include them in the
+  captured context. The stack trace says where the program broke; the recent
+  log lines say what it was doing. That narrative is exactly what a repair
+  proposal — and a human reading an escalated issue — is missing today.
+  Opt-in, size-capped, and redacted through the same chokepoint, because log
+  messages are free text that can carry sensitive values.
 
 ## PROPOSE — who writes the fix
 
@@ -41,15 +84,62 @@ issue body's detail level is explicit policy (`GITHUB["issue_detail"]`):
 
 | Level | Issue contains | Residual risk |
 |---|---|---|
-| `reference` (default) | error type + message, function name + file, timestamp/artifact id pointing to the LOCAL `_healing_agent_exceptions/` record — the reader fetches details from the machine/logs | lowest: no values leave the machine |
-| `redacted` | the name-based redacted context JSON attached | sensitive VALUES under innocently-named variables can still slip through — documented, opt-in |
-| `ai-anonymized` | an extra AI pass rewrites values (names, ids, amounts) into placeholders before upload | costs a model call; anonymization quality is probabilistic — opt-in |
+| `reference` (default) | error type + message, function name, repository-relative file/line, and pointers to the LOCAL `_healing_agent_exceptions/` / `_healing_agent_fixes/` artifacts | lowest: no captured values are uploaded — but note the exception MESSAGE itself is included, and a message like `KeyError: 'customer_tax_id'` is already a disclosure |
+| `redacted` | additionally attaches the name-based redacted context JSON | sensitive VALUES under innocently-named variables can still slip through — documented, opt-in |
+| `ai-anonymized` | additionally attaches a context JSON where an extra AI pass replaced values with placeholders | costs a model call; anonymization quality is probabilistic — opt-in |
+
+The choice is the operator's: whoever supplies the repository and the token
+decides how much detail is appropriate. On an internal repository the richer
+levels are a gift rather than a risk, which is why all three exist instead of
+one cautious default.
 
 Authentication follows the standing guardrail: the config stores only the
 NAME of the environment variable holding the token
 (`GITHUB["token_env"] = "GITHUB_TOKEN"`) or relies on `gh` CLI auth — the
 token value itself never appears in `healing_agent_config.py`, which is
 exactly the file class that must stay secret-free.
+
+### Deduplication — one issue per distinct failure
+
+A scheduled job failing every minute must not open 1440 issues a day. Each
+issue carries an invisible fingerprint marker in its body
+(`<!-- healing-agent-fingerprint: … -->`), built from:
+
+- the exception type;
+- the function's qualified name;
+- the repository-relative file path (never the absolute path, so local
+  usernames are not disclosed);
+- the failing source line's TEXT, not its line number — line numbers shift on
+  every edit and would fragment one failure into many issues;
+- the exception message with **digits normalized** (`row 5 failed` and
+  `row 812 failed` collapse into one issue) while quoted identifiers are
+  preserved (`KeyError: 'amount'` stays distinct from `KeyError: 'osszeg'`,
+  because two different drifted columns are two different problems).
+
+Before opening, healing-agent lists the repository's OPEN issues carrying the
+`healing-agent` label and matches the fingerprint. The search API is
+deliberately avoided: its indexing lag would let duplicates through exactly in
+the rapid-repeat case that matters most.
+
+Decisions kept deliberately simple:
+
+- **Duplicate found → skip**, logging the existing issue URL. Every occurrence
+  is already recorded in the local artifacts, so nothing is lost, and the
+  issue thread stays readable.
+- **Closed issue + recurrence → new issue.** A failure that returns after
+  being fixed is a regression and deserves its own ticket; the closed issue
+  keeps the earlier history.
+- **No local dedup cache.** The one API call costs nothing next to the model
+  calls already being made, and a cache would only add a file that can
+  disagree with reality after someone closes an issue by hand.
+
+### Also available as an agent tool
+
+The same issue opener is exposed as an agent tool, so escalation can be a
+deliberate act rather than only an automatic consequence: an agent that
+concludes a failure is not safely repairable can file the report itself. The
+existing `agent_tools/` are experimental and untested; tools that can create
+outward-facing artifacts need real tests before they are trusted.
 
 ## VERIFY — ordered gates, all must pass
 

@@ -50,10 +50,11 @@ Next steps (each one scenario + at most a prompt/context change):
 
 ## Short term: 0.4 — repairs that can be trusted
 
-The unifying design is the three-stage **propose → verify → apply pipeline**
-— pluggable fix generation, ordered verification gates before any mutation,
-a single APPLY policy switch for where accepted candidates land, and
-automatic restore on definitive failure. See the full specification in
+The unifying design is the **observe → propose → verify → apply pipeline** —
+context capture with or without a failure, pluggable fix generation, ordered
+verification gates before any mutation, a single APPLY policy switch for where
+accepted candidates land, and automatic restore on definitive failure. See the
+full specification in
 [docs/apply-verify-design.md](docs/apply-verify-design.md).
 
 1. **VERIFY chain before apply** — move the behavioral check (re-run with
@@ -102,22 +103,40 @@ automatic restore on definitive failure. See the full specification in
    branches of the APPLY switch with backwards-compatible aliases. External
    engines (e.g. Aether) earn "verified backend" status by passing the live
    data-drift acceptance suite through the hook.
-6. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
+6. **OBSERVE: capture without a failure** — `capture_context` already
+   supports `error=None`; expose it as `healing_agent.capture(label=...)` for
+   snapshots at any point, plus a `probe` mode that exercises a configured
+   call (e.g. an API request) and stores its context, so integration drift is
+   visible BEFORE a loader raises. Snapshots go to the local artifact
+   directory by default, or to a `CAPTURE_SINK` command / GitHub issue.
+   Redaction runs before every sink.
+7. **Logging interoperability** — emit through
+   `logging.getLogger("healing_agent")` so hosts route healing output with
+   stdlib logging (loguru/structlog interoperate through their documented
+   stdlib bridges); printing remains the fallback when no handler is
+   configured, so current behavior is preserved. Inward: an opt-in
+   ring-buffer handler adds the last N application log records to the captured
+   context — the stack says where it broke, the log says what it was doing.
+8. **Agent tools worth trusting** — the existing `agent_tools/` are
+   experimental and untested; add a GitHub-issue tool so an agent can escalate
+   deliberately, and cover every tool that touches the system or creates
+   outward-facing artifacts with real tests.
+9. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
    proposal, diff, attempts, evidence, artifact paths); `report`/`propose`/
    `verify`/`apply` modes with `apply` as compatibility default; changed-line
    and allowed-path policies. *Acceptance: a failed run raises the original
    error and still leaves a machine-readable repair report.*
-7. **Business contracts** — optional per-function contracts (invariants,
+10. **Business contracts** — optional per-function contracts (invariants,
    forbidden changes, related tests); executable assertions are authoritative
    over prose. Repairs may never delete or weaken supplied tests.
-8. **Classify before asking an LLM** — separate application bugs from
+11. **Classify before asking an LLM** — separate application bugs from
    transient provider/dependency/environment failures; deterministic recovery
    (retry/backoff/fallback) first; replace direct `AUTO_SYSCHANGE` installs
    with a reviewable, policy-gated dependency proposal.
-9. **Modern provider layer** — small adapter protocol, structured repair
+12. **Modern provider layer** — small adapter protocol, structured repair
    output instead of Markdown parsing, scheduled compatibility matrix with
    published tested model IDs.
-10. **Honest benchmark** — small bug suites including adversarial cases where a
+13. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
    false-fix rate, attempts, latency, cost, and diff size.
 
