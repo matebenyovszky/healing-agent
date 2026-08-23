@@ -29,10 +29,14 @@ external.
 
 The command form lets an organization plug in its own repair harness
 (a stronger agent, a fine-tuned model, a rule engine) without healing-agent
-learning anything about it. A future protocol extension may allow the
-response to reference a Git branch instead of inline code
-(`{"branch": "healing/fix-..."}`) — healing-agent would fetch the candidate
-from there; inline `fixed_code` remains the v1 contract.
+learning anything about it. The response can take three forms — inline code
+is the v1 contract, the others are planned extensions:
+
+- `{"fixed_code": "def ..."}` — inline candidate (v1);
+- `{"fixed_code_path": "/tmp/candidate.py"}` — the harness wrote the
+  candidate to a file;
+- `{"branch": "healing/fix-..."}` — the harness pushed a branch (or opened a
+  PR); healing-agent fetches the candidate from there.
 
 ## VERIFY — ordered gates, all must pass
 
@@ -40,7 +44,7 @@ from there; inline `fixed_code` remains the v1 contract.
 |---|---|---|---|
 | `syntax` | `compile()` + single-function AST check | ms | none (always on) |
 | `rerun` | execute the candidate with the original arguments on an ISOLATED copy (temp import), never the live file | ms–s | none (default on) |
-| `command` | run ANY command inside the isolated workspace where the candidate is already applied; **exit code 0 = pass**. `pytest tests/test_loader.py` needs no protocol at all; protocol-aware engines (e.g. Aether in check mode) can read the candidate-context JSON from the `HEALING_AGENT_CANDIDATE` env var. Configurable globally (`VERIFY_COMMAND`) or per function (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")` — the decorator's existing local-config merge already carries it). | s | one command line |
+| `command` | run ANY command inside the isolated workspace where the candidate is already applied; **exit code 0 = pass**. `pytest tests/test_loader.py` needs no protocol at all; protocol-aware engines (e.g. Aether in check mode) can read the candidate-context JSON from the `HEALING_AGENT_CANDIDATE` env var, and MAY print a JSON object to stdout (`{"ok": false, "error": "hidden test failed"}`) which is logged as structured detail — but the exit code alone decides. Configurable globally (`VERIFY_COMMAND`) or per function (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")` — the decorator's existing local-config merge already carries it). | s | one command line |
 | `pr-checks` | open a PR from the candidate and treat the repository's OWN CI as the gate | minutes | **none** — the CI already exists |
 
 There is deliberately no separate "tests" gate: an application test run IS a
@@ -70,6 +74,13 @@ so the expensive CI gate (and human reviewers) never see it.
 this APPLY stage with verification bundled inside the external tool. In this
 design the same external engine can serve either role separately: check-only
 as a `command` VERIFY gate, or full pipeline as `APPLY="command"`.
+
+**Recommended integration is verify-only.** Once the verify gates passed,
+the write itself is trivial and healing-agent's own backup + restore-on-fail
+already covers rollback — so delegating APPLY only pays off for engines with
+genuinely transactional apply semantics (snapshots, multi-file atomicity).
+Verify-only also removes the trust problem entirely: healing-agent performs
+the write itself, so no external "ok" has to be believed.
 
 ## RESTORE on definitive failure
 
