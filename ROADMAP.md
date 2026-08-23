@@ -133,6 +133,11 @@ skills), and application failures.
 - [ ] Harness integrations: tool-decorator middleware, a CLI that turns a
       failure bundle into a `RepairResult`, an MCP server exposing it, and
       OpenTelemetry/Sentry ingestion.
+- [ ] Issue escalation as async PROPOSE: on failure, automatically open a
+      GitHub issue with explicit detail-level policy (reference-only default /
+      redacted context / AI-anonymized), so an external agent or human answers
+      with a PR that flows through `pr-checks`; config groundwork (GITHUB
+      block, token via env-var name only) ships earlier.
 - [ ] Optional GitHub App/Action: verified incident → draft PR on an isolated
       branch with least-privilege, host-supplied tokens; never push to the
       default branch or merge autonomously.

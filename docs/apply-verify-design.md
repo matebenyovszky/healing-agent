@@ -25,13 +25,31 @@ external.
 | Backend | Behavior |
 |---|---|
 | `provider` (default) | today's built-in flow: the configured AI provider generates the candidate from the redacted context |
-| `command` | the redacted context JSON goes to an external bot/harness over the subprocess protocol; it returns `{"fixed_code": "..."}` (or `{"ok": false, "error": ...}`) |
+| `command` | the redacted context JSON goes to an external bot/harness over the subprocess protocol; it answers with the unified envelope carrying the candidate |
+| `issue` | **async escalation**: open a GitHub issue about the failure and stop (the original error propagates). Whoever watches the repo's issues — a human, or an agent like a coding-assistant GitHub app — delivers the fix as a PR, which flows through the normal `pr-checks` / auto-merge path. The current run does not heal; the NEXT run does. |
 
 The command form lets an organization plug in its own repair harness
 (a stronger agent, a fine-tuned model, a rule engine) without healing-agent
 learning anything about it. Its response uses the unified envelope (below)
 with a required `candidate`; inline code is the v1 contract, path and branch
 are planned extensions.
+
+### Issue content privacy levels
+
+Exception context and captured variables can carry sensitive data, so the
+issue body's detail level is explicit policy (`GITHUB["issue_detail"]`):
+
+| Level | Issue contains | Residual risk |
+|---|---|---|
+| `reference` (default) | error type + message, function name + file, timestamp/artifact id pointing to the LOCAL `_healing_agent_exceptions/` record — the reader fetches details from the machine/logs | lowest: no values leave the machine |
+| `redacted` | the name-based redacted context JSON attached | sensitive VALUES under innocently-named variables can still slip through — documented, opt-in |
+| `ai-anonymized` | an extra AI pass rewrites values (names, ids, amounts) into placeholders before upload | costs a model call; anonymization quality is probabilistic — opt-in |
+
+Authentication follows the standing guardrail: the config stores only the
+NAME of the environment variable holding the token
+(`GITHUB["token_env"] = "GITHUB_TOKEN"`) or relies on `gh` CLI auth — the
+token value itself never appears in `healing_agent_config.py`, which is
+exactly the file class that must stay secret-free.
 
 ## VERIFY — ordered gates, all must pass
 
