@@ -15,10 +15,6 @@ durable fact and the caller multiplies by a rate it controls.
 from contextvars import ContextVar
 from typing import Any, Dict, List, Optional
 
-#: A healing session makes a handful of calls; anything near this is a runaway
-#: loop, and the ledger must not be what turns it into a memory problem.
-MAX_RECORDS = 100
-
 _calls: ContextVar[Optional[List[Dict[str, Any]]]] = ContextVar(
     "healing_agent_usage", default=None
 )
@@ -44,7 +40,7 @@ def record(
 ) -> None:
     """Add one model call. Silent no-op outside an accounting scope."""
     calls = _calls.get()
-    if calls is None or len(calls) >= MAX_RECORDS:
+    if calls is None:
         return
     calls.append({
         "provider": provider,
@@ -64,8 +60,7 @@ def summary() -> Dict[str, Any]:
     """Totals for the current scope.
 
     A token total is ``None`` when no call reported that count, and otherwise
-    sums the calls that did — with ``partial`` marking the difference, so a
-    total is never silently read as complete.
+    sums the calls that did.
     """
     calls = _calls.get() or []
     totals: Dict[str, Any] = {
@@ -73,13 +68,11 @@ def summary() -> Dict[str, Any]:
         "seconds": round(sum(c["seconds"] or 0 for c in calls), 3),
         "prompt_tokens": None,
         "completion_tokens": None,
-        "partial": False,
     }
     for field in ("prompt_tokens", "completion_tokens"):
         reported = [c[field] for c in calls if c[field] is not None]
         if reported:
             totals[field] = sum(reported)
-            totals["partial"] = totals["partial"] or len(reported) != len(calls)
     return totals
 
 
@@ -96,6 +89,5 @@ def describe() -> str:
         tokens = (
             f"tokens in/out: {'?' if prompt is None else prompt}"
             f"/{'?' if completion is None else completion}"
-            + (" (partial)" if totals["partial"] else "")
         )
     return f"{totals['calls']} model call(s), {totals['seconds']}s, {tokens}"

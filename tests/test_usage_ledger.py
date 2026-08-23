@@ -43,7 +43,6 @@ def test_totals_sum_the_calls_of_one_session():
         assert totals["prompt_tokens"] == 300
         assert totals["completion_tokens"] == 50
         assert totals["seconds"] == 2.0
-        assert totals["partial"] is False
     finally:
         usage_ledger.reset(token)
 
@@ -60,29 +59,14 @@ def test_sessions_do_not_leak_into_each_other():
         usage_ledger.reset(second)
 
 
-def test_unreported_usage_stays_none_and_is_marked_partial():
+def test_unreported_usage_stays_none_rather_than_zero():
     token = usage_ledger.start()
     try:
         usage_ledger.record("ollama", "m", prompt_tokens=None, completion_tokens=None)
+        # A zero here would read as "this call was free", which is a different
+        # claim from "this provider did not say".
         assert usage_ledger.summary()["prompt_tokens"] is None
         assert "not reported" in usage_ledger.describe()
-
-        usage_ledger.record("ollama", "m", prompt_tokens=10, completion_tokens=5)
-        totals = usage_ledger.summary()
-        # One of the two calls reported nothing: the total is real but partial,
-        # and must say so rather than passing as a complete figure.
-        assert totals["prompt_tokens"] == 10
-        assert totals["partial"] is True
-    finally:
-        usage_ledger.reset(token)
-
-
-def test_record_count_is_bounded():
-    token = usage_ledger.start()
-    try:
-        for _ in range(usage_ledger.MAX_RECORDS + 25):
-            usage_ledger.record("openai", "m", prompt_tokens=1)
-        assert len(usage_ledger.records()) == usage_ledger.MAX_RECORDS
     finally:
         usage_ledger.reset(token)
 

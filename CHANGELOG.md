@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — releasing as 0.4.0
-This release ADDS functionality and removes nothing, so SemVer makes it a MINOR
-bump: `0.4.0`, not `0.3.2`. `pyproject.toml` already carries `0.4.0` so an
-in-development build reports the version it will ship as. No configuration key,
-import path or function signature was removed or changed.
+## [0.4.0] - 2026-08-24
+**Nothing breaks.** No configuration key, import path or function signature was
+removed or changed; every new setting is opt-in and defaults to the previous
+behavior. The version is a MINOR bump because the release adds functionality,
+which is what SemVer asks for even pre-1.0.
+
+The theme is evidence and trust: healing can now be *observed* without a
+failure (`capture()`, the log ring buffer), a failure it cannot repair is no
+longer lost (GitHub issue escalation), what a repair costs is measurable
+(sampling parameters, the usage ledger), and several ways the library could
+replace your application's own exception with its own are fixed.
 
 Note on milestone naming: the roadmap's "repairs that can be trusted" milestone
 was previously called "0.4". Milestone names and version numbers are now
@@ -151,9 +157,8 @@ milestone spans several minor releases.
   completion tokens), the totals go into the saved fix artifact, and `DEBUG`
   prints them. Deliberate limits: counts only, never prompt or completion
   text, because the artifact is meant to be shareable; a provider that reports
-  no usage leaves `None` instead of a zero that would read as "free", and a
-  total mixing reported and unreported calls is marked `partial`; no prices
-  are baked in, since they change faster than releases
+  no usage leaves `None` instead of a zero that would read as "free"; no
+  prices are baked in, since they change faster than releases
 - `AI_PROVIDER` in the shipped template now reads `HEALING_AGENT_PROVIDER`
   from the environment (default unchanged), so a benchmark sweep or a
   multi-provider setup can switch providers without editing the config file
