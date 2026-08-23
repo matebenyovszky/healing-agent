@@ -40,22 +40,53 @@ def test_restore_backup_is_a_noop_when_file_is_unchanged(tmp_path):
     assert source.read_text(encoding="utf-8") == "same\n"
 
 
-def test_backups_in_the_same_second_do_not_collide(tmp_path):
-    """Regression: second-precision names let a later attempt's backup
-    overwrite the one holding the pre-healing source."""
+def test_rapid_backups_do_not_collide(tmp_path):
+    """Regression: a later attempt's backup must never overwrite the one
+    holding the pre-healing source.
+
+    Timestamps cannot carry this guarantee. Second precision obviously failed;
+    microsecond precision failed too, intermittently, because `datetime.now()`
+    has millisecond-or-worse granularity on Windows and two calls in quick
+    succession return the identical value. Uniqueness now comes from an
+    O_EXCL claim, so this test is deterministic rather than a coin flip.
+    """
     from healing_agent.code_backup import create_backup
 
     source = tmp_path / "module.py"
     source.write_text("original\n", encoding="utf-8")
     context = {"error": {"file": str(source)}}
 
-    first = create_backup(context)
-    source.write_text("mutated\n", encoding="utf-8")
-    second = create_backup(context)
+    paths = [create_backup(context)]
+    for revision in range(9):
+        source.write_text(f"mutated {revision}\n", encoding="utf-8")
+        paths.append(create_backup(context))
 
-    assert first != second, "backups taken in the same second collided"
-    with open(first, encoding="utf-8") as handle:
-        assert handle.read() == "original\n"
+    assert all(paths), "a backup failed outright"
+    assert len(set(paths)) == len(paths), (
+        f"backups collided: {len(paths) - len(set(paths))} name(s) reused"
+    )
+    with open(paths[0], encoding="utf-8") as handle:
+        assert handle.read() == "original\n", (
+            "the first backup no longer holds the pre-healing source"
+        )
+
+
+def test_a_failed_session_restores_the_original_not_a_later_mutation(tmp_path):
+    """The collision above was not cosmetic: _register_backup keeps only the
+    FIRST backup per file, so an overwritten first backup makes restore write
+    the mutated code back instead of the original."""
+    from healing_agent.code_backup import create_backup, restore_backup
+
+    source = tmp_path / "module.py"
+    source.write_text("original\n", encoding="utf-8")
+    context = {"error": {"file": str(source)}}
+
+    session_backup = create_backup(context)
+    source.write_text("mutated\n", encoding="utf-8")
+    create_backup(context)  # a second attempt, same instant
+
+    assert restore_backup(session_backup, str(source)) is True
+    assert source.read_text(encoding="utf-8") == "original\n"
 
 
 def test_restore_backup_handles_missing_backup(tmp_path):

@@ -48,7 +48,12 @@ Next steps (each one scenario + at most a prompt/context change):
   pagination drift; drift-aware prompts; decorator-preserving replacement;
   bounded generation retry.
 
-## Short term: 0.4 — repairs that can be trusted
+## Short term: repairs that can be trusted
+
+*Milestone names and version numbers are deliberately separate. A version
+number follows from what a release contains (SemVer), and this milestone spans
+several minor releases — the first slice, GitHub issue escalation, ships in
+0.4.0.*
 
 The unifying design is the **observe → propose → verify → apply pipeline** —
 context capture with or without a failure, pluggable fix generation, ordered
@@ -63,6 +68,13 @@ full specification in
    `command` gate(s) → `pr-checks`.
    *Acceptance: no candidate reaches the working tree unless every configured
    gate passes.*
+   Verification-before-mutation also unlocks candidate *selection*: once
+   nothing is written until the gates pass, generating a few candidates and
+   letting the gates choose costs only model calls. This is how
+   [Agentless](https://github.com/OpenAutoCoder/Agentless) reached its
+   results — sample, then filter by execution, instead of steering a single
+   attempt through an agent loop. Worth adding only when the benchmark
+   (item 13) can show it beats one candidate plus one retry, per unit cost.
 2. **One unified `command` verify gate** — any command run inside the
    isolated candidate workspace, pass = exit 0: the app's own pytest
    (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")`, also
@@ -88,7 +100,7 @@ full specification in
          so no half-healed file is left behind; candidates stay in
          `_healing_agent_fixes/`. *Acceptance: after any failed healing
          session the source file is byte-identical to its pre-healing state.*
-   - [ ] **Escalate as plan B** (`GITHUB["issue_on_failure"]`): open a GitHub
+   - [x] **Escalate as plan B** (`GITHUB["issue_on_failure"]`): open a GitHub
          issue at the configured detail level so the failed attempt is not
          lost — an external agent or a human answers with a PR that flows
          through `pr-checks`. Same mechanism as the `issue` PROPOSE backend,
@@ -103,24 +115,46 @@ full specification in
    branches of the APPLY switch with backwards-compatible aliases. External
    engines (e.g. Aether) earn "verified backend" status by passing the live
    data-drift acceptance suite through the hook.
-6. **OBSERVE: capture without a failure** — `capture_context` already
-   supports `error=None`; expose it as `healing_agent.capture(label=...)` for
-   snapshots at any point, plus a `probe` mode that exercises a configured
-   call (e.g. an API request) and stores its context, so integration drift is
-   visible BEFORE a loader raises. Snapshots go to the local artifact
-   directory by default, or to a `CAPTURE_SINK` command / GitHub issue.
-   Redaction runs before every sink.
-7. **Logging interoperability** — emit through
+6. **OBSERVE: capture without a failure**
+   - [x] `healing_agent.capture(label=...)` writes a redacted snapshot of the
+         calling frame at any point — no AI call, no mutation. It reuses the
+         `error=None` path that `capture_context` always supported but nothing
+         exposed.
+   - [x] Optional ring buffer of the application's own log records
+         (`LOG_BUFFER_SIZE`, 0/absent = never installed), armed with
+         `healing_agent.enable_log_capture()` and included in both the fix and
+         hint prompts. The stack says where it broke, the log says what it was
+         doing.
+   - [ ] `CAPTURE_SINK`: send snapshots somewhere other than the local
+         directory (a command, object storage, a GitHub issue).
+   - [ ] A `probe` that exercises a configured call and stores its context, so
+         integration drift is visible BEFORE a loader raises — see the tools
+         item below: a probe is most useful as a tool the model can invoke.
+7. **Give the model tools instead of a bigger prompt** — captured evidence is
+   currently all-or-nothing: whatever the prompt includes is sent every time,
+   and whatever it omits is invisible. Today the `variables` block (locals and
+   globals, ~2.5 KB of a ~8 KB context) is captured and saved but **never
+   sent** — a deliberate cost decision that also means the model is blind to
+   runtime state, which matters most for data drift. Tool calls invert this:
+   the model asks only for what it needs.
+   - [ ] `get_variables(pattern)` — fetch or search the captured locals and
+         globals on demand instead of shipping them all.
+   - [ ] `search_logs(pattern)` — query the ring buffer rather than pasting
+         every record into the prompt.
+   - [ ] `probe(request)` — perform a bounded, allowlisted network or CLI check
+         (a `curl`-style request against the drifted endpoint) so the model can
+         confirm what the source returns *today* rather than inferring it.
+   - [ ] `open_issue(...)` — escalate deliberately, reusing the shipped
+         escalation module.
+   Requires the structured/tool-calling provider layer (item 12). Every tool
+   that touches the system or creates outward-facing artifacts needs real
+   tests first: the existing `agent_tools/` are experimental and untested.
+8. **Logging interoperability** — emit through
    `logging.getLogger("healing_agent")` so hosts route healing output with
    stdlib logging (loguru/structlog interoperate through their documented
    stdlib bridges); printing remains the fallback when no handler is
-   configured, so current behavior is preserved. Inward: an opt-in
-   ring-buffer handler adds the last N application log records to the captured
-   context — the stack says where it broke, the log says what it was doing.
-8. **Agent tools worth trusting** — the existing `agent_tools/` are
-   experimental and untested; add a GitHub-issue tool so an agent can escalate
-   deliberately, and cover every tool that touches the system or creates
-   outward-facing artifacts with real tests.
+   configured, so current behavior is preserved. (The inward half — the ring
+   buffer — shipped with item 6.)
 9. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
    proposal, diff, attempts, evidence, artifact paths); `report`/`propose`/
    `verify`/`apply` modes with `apply` as compatibility default; changed-line
@@ -144,10 +178,22 @@ full specification in
 11. **Classify before asking an LLM** — separate application bugs from
    transient provider/dependency/environment failures; deterministic recovery
    (retry/backoff/fallback) first; replace direct `AUTO_SYSCHANGE` installs
-   with a reviewable, policy-gated dependency proposal.
+   with a reviewable, policy-gated dependency proposal. Field evidence for
+   why this comes first: in a small public CI healer
+   ([shazilhamzah/self-healing-pipeline](https://github.com/shazilhamzah/self-healing-pipeline/issues))
+   every escalated failure was a misspelled dependency, a missing test
+   directory, or the healer being blocked from editing a test file — not one
+   was an application code bug an LLM should have been asked about.
 12. **Modern provider layer** — small adapter protocol, structured repair
    output instead of Markdown parsing, scheduled compatibility matrix with
-   published tested model IDs.
+   published tested model IDs. Includes `healing-agent doctor`: check that a
+   config file was found and from where, that the selected provider's
+   environment variables are present (never printing their values), that the
+   configured model ID answers a one-token request, and that the artifact
+   directories are writable. "No provider configured" is the failure every
+   user meets first, and today it is discovered in the middle of an actual
+   incident. ([ghost](https://github.com/tripathiji1312/ghost) ships the same
+   command for the same reason.)
 13. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
    false-fix rate, attempts, latency, cost, and diff size. Publish the
@@ -156,6 +202,34 @@ full specification in
    TOSEM 2026) indexes papers rather than repositories, so a preprint is the
    only route into the surveys — and the drift scenarios are a repair class
    the existing benchmarks (Defects4J, SWE-bench) do not cover at all.
+   Designed in [docs/benchmark.md](docs/benchmark.md) — dataset layout,
+   outcome taxonomy (`healed` / `false-fix` / `refused` / `fabricated` /
+   `unhealed`), the model × params × prompt matrix, and the four small
+   library changes that block it (provider selectable per run, sampling
+   parameters passed through to every provider, token usage captured,
+   prompts addressable as named variants). Concretely, in dependency order:
+   - **A named benchmark, not a test suite.** `tests/test_data_drift.py`
+     proves the scenarios pass; a benchmark must let a stranger reproduce
+     the numbers. Split the fixtures and expected business results into a
+     declarative dataset (one directory per scenario: original input, drifted
+     input, the loader under repair, the expected result for BOTH formats)
+     plus a runner that reports repair rate, false-fix rate, attempts,
+     latency, cost and diff size per model.
+   - **Report failures, including the ones we did not solve.** Merged Excel
+     cells and formula-vs-value drift are already documented as deferred;
+     a benchmark that only contains passing scenarios is marketing. The
+     anti-fabrication guardrails are the most interesting rows precisely
+     because the correct behavior is to REFUSE.
+   - **Multiple models, published matrix.** A single-model result is an
+     anecdote. The provider layer (item 12) is what makes the matrix cheap.
+   - **Then the write-up**: the claim is not "an LLM can fix bugs" — it is
+     that a small decorator plus drift-aware prompts plus
+     verification-before-mutation repairs a failure class the APR benchmarks
+     omit (input drift, where the code is correct until the world changes),
+     and that backward compatibility with the old format is the acceptance
+     criterion that keeps it honest. arXiv `cs.SE` needs an endorsement for
+     a first-time submitter; the alternative venues that do not are a
+     workshop paper or a tool/demo track.
 14. **Incident memory** — the `_healing_agent_exceptions/` and
    `_healing_agent_fixes/` directories are write-only today: every session
    starts from zero even when the identical failure was healed last night.
@@ -178,7 +252,13 @@ full specification in
    backend and the `pr-checks` gate exist, so the escalation issue is
    designed as *agent input*, not as a human notice: redacted context JSON,
    traceback frames, the candidate that was tried, and the gate verdict that
-   rejected it. See [docs/apply-verify-design.md](docs/apply-verify-design.md).
+   rejected it. The same engines also plug in **synchronously** as
+   `PROPOSE = "command"` backends — each has a headless entry point taking a
+   problem statement plus a repository and returning a patch, which is
+   already the subprocess contract; the adapter is a user-supplied script, so
+   upstream flag changes never reach this repository. Concrete invocations
+   and the honest cost caveat are in
+   [docs/apply-verify-design.md](docs/apply-verify-design.md).
    *Acceptance: an issue opened by healing-agent contains everything an
    issue→PR agent needs to produce a patch without reproducing the failure
    itself.*

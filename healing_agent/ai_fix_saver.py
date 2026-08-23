@@ -29,8 +29,10 @@ def save_ai_fix(context: dict) -> Optional[str]:
                 f.write(f"# AI Fix generated on: {datetime.datetime.now()}\n")
                 f.write(f"# Original file: {context['error']['file']}\n")
                 f.write(f"# Function: {func_name}\n")
-                f.write(f"# Error type: {context['error'].get('error_type', 'Unknown')}\n")
-                f.write(f"# Error message: {context['error'].get('error_message', 'Unknown')}\n")
+                # capture_context writes these as 'type' and 'message'
+                # (see exception_handler.capture_context)
+                f.write(f"# Error type: {context['error'].get('type', 'Unknown')}\n")
+                f.write(f"# Error message: {context['error'].get('message', 'Unknown')}\n")
                 f.write(f"# AI Hint: {context.get('ai_hint', 'No hint provided')}\n\n")
                 f.write("# Fixed code:\n")
                 f.write(context['fixed_code'])

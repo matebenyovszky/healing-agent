@@ -78,6 +78,13 @@ Module: {function_info.get('module')}
     if context.get('ai_hint'):
         ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
 
+    # What the application was doing before it broke (only when log capture
+    # is armed; see healing_agent.enable_log_capture).
+    recent_logs = ""
+    if context.get('recent_logs'):
+        joined = "\n".join(str(line) for line in context['recent_logs'])
+        recent_logs = f"\nApplication log records leading up to the failure:\n{joined}\n"
+
     return f"""
 Fix the following Python code that produced an error, or at least handle the exceptions, add more info that could help debugging next time:
 
@@ -91,7 +98,7 @@ Error Line: {context['error'].get('error_line')}
 
 {error_details}
 {traceback_info}
-{func_info}{arg_info}{ai_hint}
+{func_info}{arg_info}{recent_logs}{ai_hint}
 
 Return only the fixed code without any explanations or markdown formatting.
 Return exactly ONE top-level function definition. Place any imports and helper functions INSIDE the function body, never at module level.
@@ -199,7 +206,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         emit(f"♣ Error during code fixing: {str(e)}")
         emit(f"♣ Error type: {type(e).__name__}")
         emit(f"♣ Error details: {repr(e)}")
-        emit(f"♣ Error traceback:")
+        emit("♣ Error traceback:")
         import traceback
         traceback.print_exc()
         return

@@ -14,7 +14,6 @@ import datetime as _datetime
 import difflib
 import hashlib
 import json
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path

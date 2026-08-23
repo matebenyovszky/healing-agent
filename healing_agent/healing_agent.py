@@ -13,12 +13,17 @@ from .exception_handler import capture_context
 from .exception_saver import save_context
 from .git_patch_saver import apply_git_patch, save_git_patch
 from .github_issue import open_issue_for_failure
+from .log_buffer import arm_from_config_if_requested, recent_records
 from .redactor import redact
 from .console import emit
 
 
-_repair_attempts: ContextVar[Dict[str, int]] = ContextVar(
-    "healing_agent_repair_attempts", default={}
+# The default must NOT be a mutable dict: a ContextVar default is a single
+# object shared by every context that never set the variable, so an in-place
+# mutation anywhere would leak attempt counts across unrelated healing runs.
+# None means "no attempts recorded yet" and is read through _current_attempts().
+_repair_attempts: ContextVar[Optional[Dict[str, int]]] = ContextVar(
+    "healing_agent_repair_attempts", default=None
 )
 
 # Tracks the outermost healing session so a definitive failure can restore the
@@ -33,6 +38,11 @@ _healing_session: ContextVar[Optional[Dict[str, Any]]] = ContextVar(
 def _repair_key(func: Callable[..., Any]) -> str:
     """Return a stable key across reloads of the decorated function."""
     return f"{func.__module__}:{func.__qualname__}"
+
+
+def _current_attempts() -> Dict[str, int]:
+    """Return the attempt counters for this context, never the shared default."""
+    return _repair_attempts.get() or {}
 
 
 def _register_backup(file_path: str, backup_path: Optional[str]) -> None:
@@ -90,7 +100,7 @@ def healing_agent(
                         session["config"] = config
 
                     repair_key = _repair_key(func)
-                    attempts = _repair_attempts.get()
+                    attempts = _current_attempts()
                     attempts_used = attempts.get(repair_key, 0)
                     max_attempts = config.get("MAX_ATTEMPTS")
                     if (
@@ -191,6 +201,13 @@ def _attempt_healing(
     context = redact(context, config)
     if config.get("DEBUG"):
         emit("♣ Context redacted for secrets before AI/disk usage")
+
+    # Optional narrative: what the application was doing before it broke.
+    recent_logs = recent_records(config)
+    if recent_logs:
+        context["recent_logs"] = recent_logs
+    else:
+        arm_from_config_if_requested(config)
 
     # Escalation should describe the original application failure, not a
     # later failure of the agent's own candidate.

@@ -5,8 +5,56 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — releasing as 0.4.0
+This release ADDS functionality and removes nothing, so SemVer makes it a MINOR
+bump: `0.4.0`, not `0.3.2`. `pyproject.toml` already carries `0.4.0` so an
+in-development build reports the version it will ship as. No configuration key,
+import path or function signature was removed or changed.
+
+Note on milestone naming: the roadmap's "repairs that can be trusted" milestone
+was previously called "0.4". Milestone names and version numbers are now
+separate — a version number follows from what a release contains, and that
+milestone spans several minor releases.
+
 ### Fixed
+- **Hint prompts leaked the capture wrapper into the model's reading of
+  arguments.** Captured arguments were interpolated as the raw structure
+  `{'payload': {'value': ..., 'type': 'dict'}}`, and the model was observed
+  treating the wrapper keys as the argument's own keys — a live escalation
+  issue contained exactly that misreading. Arguments are now rendered as
+  `- name (type: T) = value`
+- **Backup filenames are now unique by construction, not by clock resolution.**
+  0.3.1 addressed same-second backup collisions by adding microsecond precision
+  to the name, which is not a guarantee: `datetime.now()` has millisecond or
+  worse granularity on Windows, so two backups taken in quick succession — a
+  second repair attempt is exactly that — could still receive the identical
+  name. The second copy then overwrote the first, and the first is the one
+  holding the PRE-HEALING source, because a session keeps only the earliest
+  backup per file. `RESTORE_ON_FAILURE` would faithfully restore the mutated
+  code it exists to undo. Names are now claimed atomically with
+  `O_CREAT | O_EXCL` and given a numeric suffix on collision. Caught by an
+  intermittently failing regression test, which is now deterministic
+- Backup names are derived with `os.path.splitext` instead of
+  `replace('.py', '')`, which stripped every occurrence — `loader.python.py`
+  produced a backup named `loaderthon`
+- Saved AI fixes no longer report `Error type: Unknown` / `Error message:
+  Unknown`. `ai_fix_saver` read `error_type` / `error_message`, but
+  `capture_context` writes those fields as `type` / `message`, so every header
+  in `_healing_agent_fixes/` since the feature shipped was blank
+- `exception_saver.save_context()` could raise `UnboundLocalError` instead of
+  returning: its `return file_path` sat after the outer `except`, so a failure
+  before the path was built (a context without `error["file"]`) escaped the
+  saver and replaced the application's own exception in the healing path. It
+  now returns `None`, as its type hint always promised, and also returns `None`
+  rather than a path to a file that could not be written
+- `_repair_attempts` used a mutable `{}` as its `ContextVar` default — a single
+  object shared by every context that never set it. Nothing mutated it in
+  place, so no counts leaked, but the next in-place update would have leaked
+  them across unrelated healing sessions. The default is now `None`
+- `import healing_agent.config_template` (and any other submodule this package
+  does not import itself) failed with `ImportError`. The package replaces
+  itself with a callable instance in `sys.modules`, and that instance did not
+  carry `__path__`, so the import system did not recognise it as a package
 - **Console output can no longer replace the application's exception.** Healing
   Agent decorates its messages with `♣`, `⚕️` and `✧`, which a cp1252 console —
   the Windows default, inherited by any redirected stdout such as a scheduled
@@ -19,6 +67,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it because pytest captures stdout through a UTF-8 capable buffer
 
 ### Added
+- **`healing_agent.capture(label=...)`: evidence without a failure.** Writes a
+  redacted context snapshot of the calling frame at any point — no exception,
+  no AI call, no mutation. It exposes the `error=None` path that
+  `capture_context` always supported but nothing could reach. Snapshots go to
+  `_healing_agent_captures/` next to the calling module, or to `CAPTURE_DIR`.
+  Capturing never raises into the observed program
+- **Optional ring buffer of the application's own log records.**
+  `LOG_BUFFER_SIZE` (0 or absent means the handler is never installed and
+  nothing is recorded) plus `healing_agent.enable_log_capture()` /
+  `disable_log_capture()`. Buffered records join the captured context and both
+  the fix and hint prompts, so the model sees what the program was doing before
+  it broke, not only where it stopped. Level-filtered via `LOG_BUFFER_LEVEL`,
+  per-record size capped, and documented as unable to redact free-text log
+  messages. A buffer only holds what was recorded before the failure, so it
+  must be armed at startup
+- `capture_context(frame=...)` accepts an explicit frame, so a caller other
+  than the decorator can snapshot the frame it actually means
+- `healing_agent.__version__`, read from installed package metadata, so
+  `pyproject.toml` is the only place the distribution version is written
+- **Config schema compatibility is now checked and repaired on load.**
+  `HEALING_AGENT_CONFIG_VERSION` was declared in the generated config file but
+  never read by anything. It now marks the config SCHEMA — which keys exist —
+  and is compared against `healing_agent._version.CONFIG_SCHEMA_VERSION` every
+  time a config is loaded:
+  - a config predating the current schema keeps working: every behavior key it
+    is missing is filled in from the shipped template, and the user is told
+    which ones, by name, so the file can be refreshed deliberately
+  - provider credentials (`AI_PROVIDER`, `AZURE`, `OPENAI`, `ANTHROPIC`,
+    `OLLAMA`, `LITELLM`) are NEVER filled in — the template holds only
+    placeholders, and defaulting one would turn "no provider configured" into
+    a confusing authentication error
+  - a config from a NEWER install is loaded unchanged with a warning that
+    unknown settings are ignored
+  - the schema version is bumped only when a config key is added, renamed or
+    removed — not on every release — and is then set to the release that ships
+    the change, so it stays comparable with markers already on disk and stops
+    declaring every existing config outdated on each patch release
+- Modules a config file imports (`import os` at the top of the template) are no
+  longer carried along as if they were settings
+- Ruff lint gate in CI, restricted to defect-hunting rules (`E9`, `F`, `B`) so
+  a failure always means something real rather than a style preference
+- CodeQL analysis (`security-and-quality`) on push, pull request and weekly
+- Dependabot for GitHub Actions and pip, with development dependencies grouped
+  into a single pull request
 - GitHub issue escalation: with `GITHUB["issue_on_failure"] = True`, a failure
   healing could not repair opens an issue in the application's own repository,
   so the attempt is not lost and an issue→PR agent or a human can answer with
@@ -33,6 +125,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   listed for matching rather than queried through the search API, whose
   indexing lag would leak duplicates in exactly the rapid-repeat case
 
+- **Provider sampling parameters.** Every provider block accepts an optional
+  `params` dict, forwarded to that provider verbatim: request keyword
+  arguments for Azure, OpenAI, Anthropic and LiteLLM, and Ollama's `options`
+  object for local models — which previously received no sampling settings at
+  all, so temperature, `seed` and `num_ctx` could not be set. Nothing is
+  validated or translated here: parameter names belong to the provider, and a
+  whitelist would go stale with every API release. An absent or empty `params`
+  produces exactly the request earlier releases sent. For Anthropic, `params`
+  overrides the block-level `temperature` / `max_tokens` shorthands, so one
+  config can be swept across settings without being rewritten
+- `AI_PROVIDER` in the shipped template now reads `HEALING_AGENT_PROVIDER`
+  from the environment (default unchanged), so a benchmark sweep or a
+  multi-provider setup can switch providers without editing the config file
+- `docs/apply-verify-design.md`: why this is not a CI healer — CI is the
+  verification gate (`pr-checks`), not the surface being repaired; the
+  runtime evidence a CI-triggered agent cannot see is the whole point
 - `docs/benchmark.md`: the repair benchmark design — one scenario dataset
   shared with the acceptance suite, an outcome taxonomy that separates a real
   repair from a `false-fix` and a correct refusal from a `fabricated` value,

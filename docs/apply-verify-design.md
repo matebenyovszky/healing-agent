@@ -1,8 +1,12 @@
-# Propose, Verify & Apply design (0.4 target)
+# Propose, Verify & Apply design
+
+*Target: the "repairs that can be trusted" milestone (see
+[ROADMAP.md](../ROADMAP.md)). The milestone spans several minor releases, so it
+is named rather than numbered — version numbers follow from release content.*
 
 The 0.3 heal loop verifies AFTER mutating the live file: the only behavioral
 check (re-running with the original arguments) happens once the source is
-already rewritten. 0.4 inverts this and makes the whole pipeline explicit
+already rewritten. This design inverts that and makes the whole pipeline explicit
 policy — three swappable stages behind one external boundary:
 
 ```text
@@ -28,11 +32,31 @@ first-class stage, because the same evidence that powers a repair is valuable
 on its own: knowing every variable at the moment an API call returned
 something unexpected is often the whole debugging session.
 
-| Mode | Behavior |
-|---|---|
-| `off` (default) | context is captured only when an exception occurs |
-| `capture` | `healing_agent.capture(label="after-fetch")` writes a redacted context snapshot at any point in the code; no AI call, no mutation |
-| `probe` | run a configured call (e.g. the API request described in config) and save its context — a self-test that answers "what does this integration actually return today?" |
+| Mode | Behavior | Status |
+|---|---|---|
+| exception (default) | context is captured when a supervised function raises | shipped |
+| `capture` | `healing_agent.capture(label="after-fetch")` writes a redacted context snapshot at any point in the code; no AI call, no mutation | **shipped** |
+| log ring buffer | `LOG_BUFFER_SIZE` > 0 plus `healing_agent.enable_log_capture()` keeps the last N application log records and includes them in the captured context and both prompts | **shipped** |
+| `probe` | perform a configured call (e.g. an API request) and save its context — "what does this integration actually return today?" | planned, best as a model-invokable tool |
+
+### Evidence: pushed vs. pulled
+
+Everything the model sees today is *pushed*: the prompt carries a fixed
+selection, and what it omits is invisible. The `variables` block — locals and
+globals, about 2.5 KB of a typical 8 KB context — is captured and saved but
+deliberately **never sent**, because it would roughly double the ~990-token
+fix prompt on every attempt, and attempts nest. The ring buffer is a
+measured exception to that rule: it is off unless asked for, and its size is
+the operator's explicit budget.
+
+The better long-term answer is *pulled* evidence: give the model tools
+(`get_variables`, `search_logs`, `probe`) so it requests only what a specific
+failure needs. See ROADMAP item 7; it depends on the structured/tool-calling
+provider layer.
+
+⚠ Log messages are free text, so name-based redaction cannot see inside them:
+`logger.info(f"token={t}")` would reach the provider. The ring buffer is
+therefore opt-in, level-filtered, and documented as such.
 
 Where snapshots go is the same one-boundary decision as everywhere else
 (`CAPTURE_SINK`): the local `_healing_agent_exceptions/` directory by default,
@@ -127,6 +151,39 @@ Design consequences, all of them cheap:
   such an agent can be plugged in as a `PROPOSE = "command"` backend for
   synchronous repair, with the `issue` backend as its asynchronous form. One
   boundary, two latencies.
+
+#### The same agents, plugged in directly as PROPOSE backends
+
+Escalating through an issue is the zero-coupling path, and it is the right
+default. But every one of these tools also has a headless entry point that
+takes a problem statement and a repository and returns a patch — which is
+exactly the `PROPOSE = "command"` contract. The adapter is a shell script
+that writes the redacted context to a problem-statement file, runs the tool,
+and echoes the unified envelope with the resulting patch as `candidate`.
+
+| Engine | Headless invocation | Where the patch appears |
+|---|---|---|
+| [SWE-agent](https://github.com/SWE-agent/SWE-agent) | `sweagent run --agent.model.name=… --env.repo.path=<repo> --problem_statement.path=<file>` | a `.patch` file whose path the run prints |
+| [OpenHands](https://github.com/All-Hands-AI/OpenHands) | `openhands --headless -f task.txt` (`--json` for machine-readable output) | working tree of the mounted repository |
+| [auto-code-rover](https://github.com/nus-apr/auto-code-rover) | `python app/main.py local-issue --local-repo <repo> --issue-file <file> --output-dir <dir> --task-id …` | `selected_patch.json` in the output directory |
+
+Flag names and outputs are the current upstream ones and will drift; that is
+precisely why the adapter is a user-supplied script on the subprocess
+boundary and not code in this repository. What healing-agent guarantees is
+the part that does not drift: the problem statement it writes (redacted
+context, traceback frames, failing line, rejected candidates and their gate
+verdicts), and that whatever comes back is treated as an unverified
+candidate — it enters the VERIFY chain at the first gate like any other.
+
+Two properties make this worth having even though the `issue` path exists:
+it is synchronous, so a repair can land inside the same run rather than the
+next one; and it works on repositories with no GitHub remote at all.
+
+The honest limit: these engines expect a repository and a task description,
+and they are priced accordingly — a heavyweight agent per runtime exception
+is the wrong default for a loader that fails every night at 02:00. Use them
+where a repair genuinely needs repository-scale reasoning, and let the
+built-in provider handle drift.
 
 ### Incident memory feeds PROPOSE
 
@@ -261,7 +318,7 @@ sequence is:
    available under `_healing_agent_fixes/`; `False` keeps the mutated file for
    inspection instead.
    *Acceptance: after any failed healing session, the source file is
-   byte-identical to its pre-healing state.* — **shipped in 0.4 groundwork**
+   byte-identical to its pre-healing state.* — **shipped in 0.3.1**
 2. **Escalate as plan B** (`GITHUB["issue_on_failure"]`, planned) — open a
    GitHub issue describing the failure at the configured detail level, so the
    attempt is not silently lost: an external agent or a human can answer with
@@ -302,6 +359,42 @@ Guardrails:
 - the token is host-level (`gh` auth / environment), never enters the model
   context or the healed process config;
 - PR bodies are built from the redacted provenance sidecar.
+
+## Why this is not a CI healer
+
+The obvious-looking product next door is "CI went red, let an LLM fix it and
+open a PR". That space is crowded and it is not ours: Codex has a documented
+CI-autofix recipe, Claude Code watches PRs and pushes fixes, GitHub is putting
+coding agents inside the Actions loop, and `autofix.ci` covers the
+deterministic formatter/linter half. Those tools are on home ground there —
+CI hands them a repository, a diff and a log, which is exactly what an
+issue→PR agent needs.
+
+What none of them can see is the running process. Healing Agent's ground is
+the 02:00 scheduled job: no pull request, no diff, no reviewer, no agent
+watching — just an exception and the values that were in memory when it
+happened. That evidence exists for one moment and then is gone.
+
+So the relationship is inverted deliberately:
+
+| | CI healer | Healing Agent |
+|---|---|---|
+| Trigger | a red pipeline | a runtime exception inside the process |
+| Evidence | logs and the diff | arguments, locals, traceback frames, recent log records |
+| CI's role | the thing being repaired | **the verification gate** (`pr-checks`) |
+| Failure mode it prevents | a broken build | a scheduled job silently producing wrong data |
+
+CI is therefore infrastructure we *consume*, not a surface we compete on: the
+repository's own suite is what decides whether a runtime-derived candidate is
+allowed to land (`pr-checks` + `APPLY="pr"`). A small public CI healer we
+looked at makes the point from the other side — its allowlist restricts it to
+`requirements.txt`, `deployment.yaml` and the workflow file, i.e. it repairs
+infrastructure, never the application logic that produced a wrong number.
+
+The one CI-shaped artifact worth shipping is thin: an optional GitHub Action
+that runs a scheduled job under `healing-agent run`, so a nightly pipeline
+gets the same observe → propose → verify → apply → restore loop and the same
+escalation path. That is packaging, not a second product.
 
 ## One external boundary: the subprocess protocol
 

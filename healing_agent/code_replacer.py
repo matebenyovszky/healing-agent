@@ -31,7 +31,7 @@ def decorator_checker(file_path: str) -> bool:
                     
                 start_line = node.lineno
                 end_line = node.end_lineno
-                has_healing_decorator = False
+                # decorator_count below carries the decorator state
                 
                 # Check existing decorators
                 if hasattr(node, 'decorator_list'):
@@ -39,8 +39,8 @@ def decorator_checker(file_path: str) -> bool:
                     for dec in node.decorator_list:
                         if isinstance(dec, ast.Name) and dec.id == 'healing_agent':
                             decorator_count += 1
-                            has_healing_decorator = True
-                            
+
+
                     # Multiple healing_agent decorators found
                     if decorator_count > 1:
                         changes_needed = True
@@ -71,7 +71,7 @@ def decorator_checker(file_path: str) -> bool:
         
         while i < len(lines):
             should_add = True
-            for start, end, needs_decorator, func_name in function_data:
+            for start, _end, needs_decorator, _func_name in function_data:
                 if i == start - 1:  # Line before function def
                     # Remove extra healing_agent decorators if present
                     while i > 0 and lines[i-1].strip().startswith('@healing_agent'):

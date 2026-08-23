@@ -3,7 +3,7 @@
 import os
 import ast
 import json
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Union
 
 def get_function_details(file_path: str) -> List[Dict[str, str]]:
     """

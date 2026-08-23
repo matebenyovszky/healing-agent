@@ -6,7 +6,6 @@ never replace the application's own exception with a reporting problem.
 """
 
 import importlib
-import json
 
 import pytest
 

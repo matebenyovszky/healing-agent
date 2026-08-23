@@ -46,6 +46,23 @@ def handle_connection_errors(provider_name: str):
         return wrapper
     return decorator
 
+def _params(config: Dict) -> Dict:
+    """Return the provider block's sampling parameters, forwarded verbatim.
+
+    A provider block may carry ``"params": {...}`` — temperature, seed, top_p,
+    ``num_ctx``, whatever that provider accepts. Healing Agent does not
+    validate or translate the contents: the provider owns its own parameter
+    names, and a whitelist here would go stale with every API release.
+
+    Absent, empty or malformed means "send nothing", so a config without
+    ``params`` produces exactly the requests previous releases sent.
+    """
+    params = config.get('params') or {}
+    if not isinstance(params, dict):
+        emit("♣ Ignoring 'params': expected a dict of provider sampling options")
+        return {}
+    return dict(params)
+
 @handle_connection_errors("Azure")
 def _get_azure_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle Azure OpenAI API requests"""
@@ -63,7 +80,8 @@ def _get_azure_response(prompt: str, config: Dict, system_prompt: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            timeout=config.get('timeout', 30)
+            timeout=config.get('timeout', 30),
+            **_params(config)
         )
         return response.choices[0].message.content.strip()
     except openai.APIError as e:
@@ -86,7 +104,8 @@ def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            timeout=config.get('timeout', 30)
+            timeout=config.get('timeout', 30),
+            **_params(config)
         )
         return response.choices[0].message.content.strip()
     except openai.APIError as e:
@@ -111,6 +130,10 @@ def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> st
         if config.get('temperature') is not None:
             request_kwargs["temperature"] = float(config['temperature'])
 
+        # An explicit params entry wins over the block-level shorthands above,
+        # so a benchmark sweep can override temperature per run.
+        request_kwargs.update(_params(config))
+
         response = client.messages.create(**request_kwargs)
         return response.content[0].text
     except Exception as e:
@@ -120,14 +143,21 @@ def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> st
 @handle_connection_errors("Ollama")
 def _get_ollama_response(prompt: str, config: Dict) -> str:
     """Handle Ollama API requests"""
+    payload = {
+        "model": config['model'],
+        "prompt": prompt,
+        "stream": False
+    }
+    # Ollama takes sampling parameters (temperature, seed, top_p, num_ctx,
+    # num_predict) inside "options" rather than at the top level.
+    options = _params(config)
+    if options:
+        payload["options"] = options
+
     try:
         response = requests.post(
             f"{config['host']}/api/generate",
-            json={
-                "model": config['model'],
-                "prompt": prompt,
-                "stream": False
-            },
+            json=payload,
             timeout=config.get('timeout', 120)
         )
         response.raise_for_status()
@@ -151,7 +181,8 @@ def _get_litellm_response(prompt: str, config: Dict, system_prompt: str) -> str:
                 {"role": "user", "content": prompt}
             ],
             api_key=config['api_key'],
-            timeout=config.get('timeout', 30)
+            timeout=config.get('timeout', 30),
+            **_params(config)
         )
         if not response or not response.choices:
             raise ValueError("Invalid response from LiteLLM API - no choices returned")

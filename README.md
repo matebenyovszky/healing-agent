@@ -96,6 +96,8 @@ Wolverine rewrote a whole script through line-numbered JSON edit operations; Hea
 
 **Why the codebase stays small.** [Agentless](https://github.com/OpenAutoCoder/Agentless) reported that a fixed localize → repair → validate pipeline — no agent loop, no tool-choosing LLM — outperformed the open-source software agents on SWE-bench Lite (32.00%) at roughly $0.70 per issue. That is external evidence for the thesis above: complexity belongs in verification, not in scaffolding.
 
+**Not a CI healer — the inverse.** "CI went red, let an agent fix it and open a PR" is a crowded space, and coding agents are on home ground there: CI hands them a repository, a diff and a log. None of them can see the running process. Healing Agent's ground is the 02:00 scheduled job — no pull request, no reviewer, no agent watching, just an exception and the values that were in memory when it happened. CI is not what we repair, it is what we *verify against*: the repository's own test suite is the gate a runtime-derived fix has to pass ([docs/apply-verify-design.md](docs/apply-verify-design.md)).
+
 **Compared to hosted products.** [Sentry Seer Autofix](https://sentry.io/product/seer/autofix/) solves the neighbouring problem commercially, and solves it well: production telemetry in, root cause and a pull request out. It is a hosted service, though, and your errors have to reach it. Healing Agent is MIT-licensed, runs inside your own process with your own provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM), redacts secrets before anything leaves the machine, and needs no backend at all. It also sees what a telemetry pipeline cannot: the actual argument and local-variable values at the moment of the failure.
 
 ## Installation 💻
@@ -130,6 +132,29 @@ def your_function():
 ```
 
 Run your script as usual. On an exception, Healing Agent captures context, generates and (by default) applies a fix, and re-executes. Context, backups, and fixes are saved next to your script in `_healing_agent_*` folders.
+
+### Observing without a failure
+
+The same evidence that powers a repair is useful on its own — knowing every variable at the moment an API call returned something unexpected is often the whole debugging session:
+
+```python
+response = requests.get(url)
+healing_agent.capture("supplier response")   # redacted snapshot, no AI call, no mutation
+```
+
+Snapshots land in `_healing_agent_captures/` next to the calling module (or `CAPTURE_DIR`). Secret redaction applies here too, and capturing never raises into your program.
+
+Optionally, Healing Agent can also keep the last N of your **own log records** and include them in the repair context — the stack trace says where the program broke, the log says what it was doing:
+
+```python
+LOG_BUFFER_SIZE = 50          # in your config; 0 or absent = never installed
+```
+
+```python
+healing_agent.enable_log_capture()   # arm it at startup, while the program is healthy
+```
+
+A ring buffer can only hold what was recorded *before* the failure, so it has to be armed early. ⚠️ Log messages are free text, so name-based redaction cannot see inside them — `logger.info(f"token={t}")` would reach the provider. Keep it off unless you trust your log messages.
 
 ## Configuration ⚙️
 
