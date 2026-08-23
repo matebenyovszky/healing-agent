@@ -27,6 +27,17 @@ was removed or changed. One default BEHAVIOR change is called out below.
 - `docs/apply-verify-design.md`: the 0.4 propose → verify → apply pipeline
   specification (unified response envelope, verify gates, APPLY policies,
   repository-CI gate, issue escalation with privacy levels)
+- `docs/apply-verify-design.md`: interoperability with issue→PR agents
+  (OpenHands, SWE-agent, auto-code-rover, Copilot coding agent) — the
+  escalation issue is specified as agent input rather than a human notice,
+  and the same boundary works synchronously as a `PROPOSE = "command"`
+  backend
+- README positioning: relationship to Wolverine, to the agentless repair
+  results, and to hosted products such as Sentry Seer
+- ROADMAP: incident memory (make the artifact directories readable evidence
+  instead of write-only exhaust), issue→PR agent interoperability, a
+  `healing-agent run script.py` outside-in runner for 1.0, and the guardrail
+  that a repair may never edit the tests that judge it
 
 ### Changed
 - **Behavior change (opt-out available):** a failed healing session now leaves

@@ -125,10 +125,22 @@ full specification in
    proposal, diff, attempts, evidence, artifact paths); `report`/`propose`/
    `verify`/`apply` modes with `apply` as compatibility default; changed-line
    and allowed-path policies. *Acceptance: a failed run raises the original
-   error and still leaves a machine-readable repair report.*
+   error and still leaves a machine-readable repair report.* Includes
+   `APPLY="ask"`: show the diff, apply only on explicit confirmation, refuse
+   rather than assume consent when there is no TTY. (Wolverine's unmerged
+   PRs [#23](https://github.com/biobootloader/wolverine/pull/23) and
+   [#21](https://github.com/biobootloader/wolverine/pull/21) both added this
+   independently in 2023 — it is what people reach for first when a healer
+   surprises them.)
 10. **Business contracts** — optional per-function contracts (invariants,
    forbidden changes, related tests); executable assertions are authoritative
-   over prose. Repairs may never delete or weaken supplied tests.
+   over prose. Repairs may never delete or weaken supplied tests. When a
+   `command` gate fails, the two possible readings — "the candidate is wrong"
+   and "the test encodes behavior that legitimately changed" — must be kept
+   apart, and only a human may resolve the second one; the repair itself
+   never edits the test that judges it. ([ghost](https://github.com/tripathiji1312/ghost)
+   arrived at the same rule from the opposite direction: it generates tests
+   and refuses to "heal" an assertion when the source looks buggy.)
 11. **Classify before asking an LLM** — separate application bugs from
    transient provider/dependency/environment failures; deterministic recovery
    (retry/backoff/fallback) first; replace direct `AUTO_SYSCHANGE` installs
@@ -138,7 +150,38 @@ full specification in
    published tested model IDs.
 13. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
-   false-fix rate, attempts, latency, cost, and diff size.
+   false-fix rate, attempts, latency, cost, and diff size. Publish the
+   data-drift suite and its numbers as a short citable write-up: the LLM4APR
+   literature (e.g. [AwesomeLLM4APR](https://github.com/iSEngLab/AwesomeLLM4APR),
+   TOSEM 2026) indexes papers rather than repositories, so a preprint is the
+   only route into the surveys — and the drift scenarios are a repair class
+   the existing benchmarks (Defects4J, SWE-bench) do not cover at all.
+14. **Incident memory** — the `_healing_agent_exceptions/` and
+   `_healing_agent_fixes/` directories are write-only today: every session
+   starts from zero even when the identical failure was healed last night.
+   Index the artifacts by the same failure fingerprint the issue
+   deduplication uses, and feed the most similar RESOLVED case — the error,
+   the accepted candidate, and which gate passed it — into the hint and fix
+   prompts. No new dependency and no embedding store: a JSON index next to
+   the artifacts, matched on fingerprint and normalized error text. Recurring
+   failure classes are exactly what this library is for, so the memory
+   compounds where it matters. *Acceptance: a repeat of an already-healed
+   failure class is repaired in fewer attempts than its first occurrence,
+   measured on the data-drift suite.*
+15. **Interoperate with issue→PR agents** — [OpenHands](https://github.com/All-Hands-AI/OpenHands),
+   [SWE-agent](https://github.com/SWE-agent/SWE-agent),
+   [auto-code-rover](https://github.com/nus-apr/auto-code-rover) and GitHub's
+   Copilot coding agent all start from a GitHub issue and end at a pull
+   request — and none of them can observe a runtime failure. Healing Agent
+   starts exactly where they cannot: at the exception, with the arguments and
+   locals in hand. The two halves compose the moment the `issue` PROPOSE
+   backend and the `pr-checks` gate exist, so the escalation issue is
+   designed as *agent input*, not as a human notice: redacted context JSON,
+   traceback frames, the candidate that was tried, and the gate verdict that
+   rejected it. See [docs/apply-verify-design.md](docs/apply-verify-design.md).
+   *Acceptance: an issue opened by healing-agent contains everything an
+   issue→PR agent needs to produce a patch without reproducing the failure
+   itself.*
 
 ## Medium term: 0.5–0.7 — heal LLM applications and agents
 
@@ -183,6 +226,28 @@ after the protocol survives two independent adapters. *Acceptance: the
 coordinator repairs the same benchmark failure through two language adapters
 without language-specific branches in policy or ledger.*
 
+- [ ] **`healing-agent run script.py` — heal from the outside.** A subprocess
+      runner that executes a whole program and treats its stderr as the
+      failure signal, instead of requiring a decorator inside the source.
+      This is what Wolverine did, it is the only mode available for code that
+      cannot be imported or decorated (vendor scripts, notebooks exported to
+      `.py`, scheduled one-offs), and it is the natural entry point for other
+      languages, since the patch layer is already language-neutral. It buys
+      breadth at the cost of evidence: no live arguments or locals, only the
+      traceback — so the decorator stays the recommended mode, and this is
+      the fallback, not the replacement. It also forces a patch
+      representation below function granularity: Wolverine used line-numbered
+      JSON edit operations applied in reverse order, which is fragile exactly
+      because the model has to count lines — the existing unified-diff patch
+      layer (`save_text_patch`) is the better carrier, with
+      `git apply --check` as a free structural gate.
+- [ ] Cross-language validation of the loop before adapters exist: the
+      [Go self-healing pipeline](https://github.com/ammarlodhi255/Self-healing-LLM-Pipeline)
+      shows the same compile → test → feed-the-error-back cycle outside
+      Python and confirms nothing in it is Python-specific; what it lacks —
+      an attempt budget, a restore path, and any check that the code is
+      *right* rather than merely compiling — is the part worth keeping ours.
+
 ## Long shots
 
 Calibrated repair confidence from verified outcomes; counterfactual replay
@@ -196,6 +261,8 @@ unsafe skills/tools and proposes the smallest reversible intervention.
 - Never silently return `None` or fabricate success after a failed repair.
 - Never invent missing required business data; unmappable input raises clearly.
 - Never let the repaired component be the only verifier of its own repair.
+- Never let a repair edit, delete, or relax the tests and assertions that
+  judge it.
 - Never modify production, durable memory, skills, prompts, dependencies, or
   credentials without an explicit policy allowing it.
 - Never send unrestricted locals, globals, source, or tool output to a remote

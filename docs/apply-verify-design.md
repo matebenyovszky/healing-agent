@@ -77,6 +77,67 @@ learning anything about it. Its response uses the unified envelope (below)
 with a required `candidate`; inline code is the v1 contract, path and branch
 are planned extensions.
 
+### Interoperating with issue→PR agents
+
+The `issue` backend is not primarily a way to notify a human — it is the
+handshake with an entire class of tools that already exists and is missing
+exactly what healing-agent has.
+
+[OpenHands](https://github.com/All-Hands-AI/OpenHands),
+[SWE-agent](https://github.com/SWE-agent/SWE-agent),
+[auto-code-rover](https://github.com/nus-apr/auto-code-rover), GitHub's
+Copilot coding agent and the research agents behind them all share one shape:
+**a GitHub issue goes in, a pull request comes out.** They are good at
+repository-scale reasoning and they run on infrastructure someone else
+maintains. What none of them can do is observe a running program: by the time
+they read the issue the process is gone, and with it the arguments, the local
+variables, the log lines leading up to the failure, and the knowledge of which
+candidate repair was already tried and rejected. Reproducing a runtime failure
+from a bug report is itself an open research problem.
+
+healing-agent occupies precisely the other half. It sits inside the process at
+the moment of the exception, and its artifacts already contain what those
+agents have to guess at.
+
+```text
+runtime exception → OBSERVE (evidence) → PROPOSE/VERIFY (local attempt)
+   → gave up → issue with the evidence attached
+       → external issue→PR agent writes the patch
+           → PR → pr-checks (the repository's own CI) → merge
+               → next run is healed
+```
+
+Design consequences, all of them cheap:
+
+- **The issue body is agent input, not a notice.** Beyond the human-readable
+  summary it carries, at the configured detail level, the redacted context
+  JSON (arguments, locals, traceback frames), the failing source line text,
+  the candidate healing-agent generated, and the gate verdict that rejected
+  it. A rejected candidate is signal, not noise: it tells the next agent
+  which direction is already known to fail.
+- **Nothing bespoke is invented for them.** The handshake is a labelled
+  GitHub issue and a pull request — the interface every one of these tools
+  already speaks. No plugin, no SDK, no version coupling.
+- **The verification story does not change.** A patch arriving from an
+  external agent is not trusted more than one healing-agent generated
+  itself: it flows through `pr-checks` (the repository's own CI) like any
+  other candidate, and the original exception keeps propagating until
+  something green lands.
+- **Reciprocal option.** The same protocol works in the other direction:
+  such an agent can be plugged in as a `PROPOSE = "command"` backend for
+  synchronous repair, with the `issue` backend as its asynchronous form. One
+  boundary, two latencies.
+
+### Incident memory feeds PROPOSE
+
+The artifact directories are currently written and never read again. Indexing
+them by failure fingerprint and injecting the most similar *resolved* case
+into the fix prompt costs one JSON file and no new dependency, and it targets
+this library's actual workload: recurring failures. It also improves the
+escalated issue — "this failure class was healed on 2026-03-12 by this
+candidate, and the same fix no longer works" is a far better bug report than
+a bare traceback. Tracked as roadmap item 14.
+
 ### Issue content privacy levels
 
 Exception context and captured variables can carry sensitive data, so the
@@ -165,6 +226,7 @@ so the expensive CI gate (and human reviewers) never see it.
 |---|---|
 | `report` | artifacts only; the original exception propagates |
 | `patch` | reviewable diff + provenance sidecar (today's `GIT_MODE="patch"`) |
+| `ask` | print the candidate diff and apply only on explicit confirmation; anything but a yes is treated as a definitive failure (restore + re-raise). Non-interactive sessions (no TTY) refuse rather than assume consent |
 | `direct` | backup → write → reload → continue (classic behavior, default) |
 | `command` | delegate apply to an external tool over the same subprocess protocol (validate/sandbox/apply/rollback externally — this is the community mutation-backend hook) |
 | `pr` | branch → commit the patch → push → pull request |

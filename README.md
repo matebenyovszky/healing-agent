@@ -80,6 +80,24 @@ graph TD
     J --> D
 ```
 
+## Where this fits 🧭
+
+Healing Agent is a **maintained successor to [Wolverine](https://github.com/biobootloader/wolverine)** — the project that demonstrated LLM-driven self-healing and then stopped: no commit since March 2024, 27 open issues and 10 unmerged pull requests, no published package. Its issue tracker reads as a list of things this project already does:
+
+| Asked for in Wolverine | Healing Agent |
+|---|---|
+| [#52](https://github.com/biobootloader/wolverine/issues/52), [#41](https://github.com/biobootloader/wolverine/issues/41) — an installable, system-wide package | `pip install healing-agent`, Python 3.10–3.13 |
+| [#1](https://github.com/biobootloader/wolverine/issues/1) — get the failing function's variable values into the prompt | context capture includes `function_arguments`, `locals` and `traceback_frames` by default |
+| [#40](https://github.com/biobootloader/wolverine/issues/40) — validate that a fix really changes something, to prevent loops | bounded attempts (`MAX_ATTEMPTS`) plus `compile()` and single-function AST checks before a candidate is accepted |
+| [#23](https://github.com/biobootloader/wolverine/issues/23) — better error handling, do not apply blindly | `AUTO_FIX=False` proposal-only mode, `RESTORE_ON_FAILURE` rollback, and the original exception always re-raised |
+| [#19](https://github.com/biobootloader/wolverine/issues/19) — GitHub Actions integration | planned as the `pr-checks` verify gate and `APPLY="pr"` ([ROADMAP.md](ROADMAP.md)) |
+
+Wolverine rewrote a whole script through line-numbered JSON edit operations; Healing Agent replaces exactly one decorated function, backs it up first, and restores it when healing fails.
+
+**Why the codebase stays small.** [Agentless](https://github.com/OpenAutoCoder/Agentless) reported that a fixed localize → repair → validate pipeline — no agent loop, no tool-choosing LLM — outperformed the open-source software agents on SWE-bench Lite (32.00%) at roughly $0.70 per issue. That is external evidence for the thesis above: complexity belongs in verification, not in scaffolding.
+
+**Compared to hosted products.** [Sentry Seer Autofix](https://sentry.io/product/seer/autofix/) solves the neighbouring problem commercially, and solves it well: production telemetry in, root cause and a pull request out. It is a hosted service, though, and your errors have to reach it. Healing Agent is MIT-licensed, runs inside your own process with your own provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM), redacts secrets before anything leaves the machine, and needs no backend at all. It also sees what a telemetry pipeline cannot: the actual argument and local-variable values at the moment of the failure.
+
 ## Installation 💻
 
 ```bash
