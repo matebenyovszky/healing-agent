@@ -50,7 +50,7 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.121.0,<1"]
 litellm = ["litellm>=1.96.2,<2"]
-dev = ["build>=1.2", "hatchling>=1.26", "pytest>=8", "ruff>=0.14", "twine>=5"]
+dev = ["build>=1.2", "hatchling>=1.26", "pytest>=8", "ruff>=0.14", "twine>=6.1"]
 
 [project.urls]
 "Homepage" = "https://github.com/matebenyovszky/healing-agent"
