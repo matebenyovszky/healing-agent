@@ -48,7 +48,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-anthropic = ["anthropic>=0.121.0,<1"]
+anthropic = ["anthropic>=0.121.0,<2"]
 litellm = ["litellm>=1.96.2,<2"]
 dev = ["build>=1.2", "hatchling>=1.26", "pytest>=8", "ruff>=0.14", "twine>=6.1"]
 
