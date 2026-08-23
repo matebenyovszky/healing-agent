@@ -7,11 +7,11 @@ from .ai_code_fixer import fix
 from .ai_fix_saver import save_ai_fix
 from .ai_hint_generator import generate_hint
 from .code_backup import create_backup
-from .code_replacer import function_replacer
 from .config_loader import load_config
 from .exception_handler import capture_context
 from .exception_saver import save_context
 from .git_patch_saver import apply_git_patch, save_git_patch
+from .mutation_backend import apply_mutation
 from .redactor import redact
 
 
@@ -207,7 +207,7 @@ def _attempt_healing(
         except Exception as git_error:
             print(f"♣ Git refused the candidate patch: {git_error}")
             return False, None
-    elif not function_replacer(context, fixed_code):
+    elif not apply_mutation(context, fixed_code, config):
         print("♣ Generated fix could not be applied.")
         return False, None
 

@@ -84,6 +84,20 @@ GIT_MODE = "off"
 GIT_PATCH_DIR = None  # Optional directory for patch + JSON provenance artifacts
 GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 
+# Mutation backend configuration
+# ------------------------------
+# direct  - existing behavior: replace the generated Python function in-place
+# command - send the repair payload to an external safe-mutation command
+#           that can validate, sandbox, apply, and roll back the change.
+#
+# This keeps Healing Agent dependency-light while allowing integrations with
+# tools such as Aether:
+#   MUTATION_BACKEND = "command"
+#   MUTATION_COMMAND = "python path/to/aether_healing_agent_adapter.py"
+MUTATION_BACKEND = "direct"
+MUTATION_COMMAND = None
+MUTATION_TIMEOUT_SECONDS = 120
+
 # Secret Redaction Configuration
 # -----------------------------
 # Captured context (variables, arguments, headers, exception attributes) is
