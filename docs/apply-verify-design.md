@@ -1,19 +1,38 @@
-# Verify & Apply design (0.4 target)
+# Propose, Verify & Apply design (0.4 target)
 
 The 0.3 heal loop verifies AFTER mutating the live file: the only behavioral
 check (re-running with the original arguments) happens once the source is
-already rewritten. 0.4 inverts this and makes both stages explicit policy:
+already rewritten. 0.4 inverts this and makes the whole pipeline explicit
+policy — three swappable stages behind one external boundary:
 
 ```text
-exception → capture + redact → hint + fix (AI, MAX_ATTEMPTS bounded)
-        → VERIFY chain (ordered gates, all must pass)
-        → APPLY policy (where the accepted candidate lands)
+exception → capture + redact
+        → PROPOSE  (who writes the fix)
+        → VERIFY   (ordered gates, all must pass — BEFORE the live file changes)
+        → APPLY    (where the accepted candidate lands)
+        → on definitive failure: RESTORE the pre-healing source from backup,
+          re-raise the original exception
 ```
 
-The guiding principle stays KISS: healing-agent builds no verification
-infrastructure of its own. It orchestrates gates that already exist — the
-Python compiler, the application's own tests, the repository's own CI — and
-exposes one subprocess boundary for everything external.
+The guiding principle stays KISS: healing-agent builds no repair, test, or
+sandbox infrastructure of its own. It orchestrates things that already exist —
+the AI provider, the Python compiler, the application's own tests, the
+repository's own CI — and exposes ONE subprocess/JSON boundary for everything
+external.
+
+## PROPOSE — who writes the fix
+
+| Backend | Behavior |
+|---|---|
+| `provider` (default) | today's built-in flow: the configured AI provider generates the candidate from the redacted context |
+| `command` | the redacted context JSON goes to an external bot/harness over the subprocess protocol; it returns `{"fixed_code": "..."}` (or `{"ok": false, "error": ...}`) |
+
+The command form lets an organization plug in its own repair harness
+(a stronger agent, a fine-tuned model, a rule engine) without healing-agent
+learning anything about it. A future protocol extension may allow the
+response to reference a Git branch instead of inline code
+(`{"branch": "healing/fix-..."}`) — healing-agent would fetch the candidate
+from there; inline `fixed_code` remains the v1 contract.
 
 ## VERIFY — ordered gates, all must pass
 
@@ -21,15 +40,17 @@ exposes one subprocess boundary for everything external.
 |---|---|---|---|
 | `syntax` | `compile()` + single-function AST check | ms | none (always on) |
 | `rerun` | execute the candidate with the original arguments on an ISOLATED copy (temp import), never the live file | ms–s | none (default on) |
-| `tests` | run application tests declared for the supervised function: `@healing_agent(TEST_COMMAND="pytest tests/test_loader.py")`; failure rejects the fix | s | per function |
-| `command:<cmd>` | external verifier over the subprocess/JSON protocol (e.g. a sandbox/hidden-test engine such as Aether in check mode) | s | external tool |
+| `command` | run ANY command inside the isolated workspace where the candidate is already applied; **exit code 0 = pass**. `pytest tests/test_loader.py` needs no protocol at all; protocol-aware engines (e.g. Aether in check mode) can read the candidate-context JSON from the `HEALING_AGENT_CANDIDATE` env var. Configurable globally (`VERIFY_COMMAND`) or per function (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")` — the decorator's existing local-config merge already carries it). | s | one command line |
 | `pr-checks` | open a PR from the candidate and treat the repository's OWN CI as the gate | minutes | **none** — the CI already exists |
 
-`pr-checks` is the zero-config profile: no per-function test declarations —
-the whole existing suite validates the repair, using infrastructure the team
-already trusts. `tests` is the fast, targeted profile for live processes.
-They compose: cheap gates first filter garbage so the expensive CI gate (and
-human reviewers) never see it.
+There is deliberately no separate "tests" gate: an application test run IS a
+command. One gate type covers pytest, hidden-test engines, linters, or
+anything else that can express pass/fail as an exit code.
+
+`pr-checks` is the zero-config profile: no per-function declarations — the
+whole existing suite validates the repair, using infrastructure the team
+already trusts. Gates compose cheapest-first: syntax and rerun filter garbage
+so the expensive CI gate (and human reviewers) never see it.
 
 ## APPLY — where an accepted candidate lands
 
@@ -38,12 +59,29 @@ human reviewers) never see it.
 | `report` | artifacts only; the original exception propagates |
 | `patch` | reviewable diff + provenance sidecar (today's `GIT_MODE="patch"`) |
 | `direct` | backup → write → reload → continue (classic behavior, default) |
-| `command` | delegate apply to an external tool over the same subprocess protocol (validate/sandbox/apply/rollback externally) |
+| `command` | delegate apply to an external tool over the same subprocess protocol (validate/sandbox/apply/rollback externally — this is the community mutation-backend hook) |
 | `pr` | branch → commit the patch → push → pull request |
 | `direct+pr` | heal locally NOW **and** open the PR for durability |
 
-`GIT_MODE` and the mutation-backend hook are absorbed as branches of this one
-switch (backwards-compatible aliases retained).
+`GIT_MODE` and `MUTATION_BACKEND` are absorbed as branches of this one switch
+(backwards-compatible aliases retained).
+
+**Terminology bridge:** what the mutation-backend hook calls "mutation" is
+this APPLY stage with verification bundled inside the external tool. In this
+design the same external engine can serve either role separately: check-only
+as a `command` VERIFY gate, or full pipeline as `APPLY="command"`.
+
+## RESTORE on definitive failure
+
+Backups already exist (`BACKUP_ENABLED`, timestamped copies per attempt) but
+0.3 never restores them: the in-memory module is rolled back, the file is not.
+0.4 closes this: when healing ends in failure after the live file was mutated
+— `MAX_ATTEMPTS` exhausted, or a post-apply gate failed — healing-agent
+restores the FIRST backup of the healing session (the pre-healing original),
+so the working tree is exactly as it was, and re-raises the original
+exception. No half-healed files are ever left behind.
+*Acceptance: after any failed healing session, the source file is
+byte-identical to its pre-healing state.*
 
 ## The PR flow in detail (standard Git machinery only)
 
@@ -55,7 +93,8 @@ candidate passes local gates
        green → continue locally with the candidate (the process already
                holds it: write + reload — no need to wait for merge
                mechanics) and let GitHub native auto-merge land it
-       red   → PR stays open for humans; the original error propagates;
+       red   → PR stays open for humans; RESTORE runs if the live file was
+               touched; the original error propagates;
                NEVER continue silently on red
 ```
 
@@ -77,18 +116,20 @@ Guardrails:
 
 ## One external boundary: the subprocess protocol
 
-Verification (`command:`), external apply (`command`), and the PR delivery
-itself are all implementable as commands speaking the same versioned
-JSON-over-stdin protocol (`healing-agent-mutation-v1`, introduced by the
-community mutation-backend hook). The first-party PR backend is simply a
-`gh`-based script on that boundary — the first of hopefully many backends.
-The subprocess boundary is also a dependency and license boundary: external
-engines stay external.
+Fix generation (`PROPOSE command`), verification (`VERIFY command`), external
+apply (`APPLY="command"`), and the PR delivery itself are all commands
+speaking the same versioned JSON-over-stdin protocol family
+(`healing-agent-mutation-v1`, introduced by the community mutation-backend
+hook). The first-party PR backend is simply a `gh`-based script on that
+boundary — the first of hopefully many backends. The subprocess boundary is
+also a dependency and license boundary: external engines stay external.
 
 ## Division of labor
 
-- healing-agent core: gate ordering, policy dispatch, PR backend, artifacts.
-- External engines (community): fast local sandbox/hidden-test verification
-  and alternative apply strategies behind `command`. Verified-backend status
-  is earned by passing the live data-drift acceptance suite
-  (`tests/test_data_drift.py`) through the hook.
+- healing-agent core: stage orchestration, gate ordering, policy dispatch,
+  PR backend, restore-on-fail, artifacts.
+- External engines (community): repair harnesses behind PROPOSE, fast local
+  sandbox/hidden-test verification behind VERIFY, alternative apply
+  strategies behind APPLY. Verified-backend status is earned by passing the
+  live data-drift acceptance suite (`tests/test_data_drift.py`) through the
+  hook.
