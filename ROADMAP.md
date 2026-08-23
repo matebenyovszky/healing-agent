@@ -50,40 +50,57 @@ Next steps (each one scenario + at most a prompt/context change):
 
 ## Short term: 0.4 — repairs that can be trusted
 
-1. **Function-documented validation tests** — let the application declare
-   which of its own tests validate a supervised function (e.g.
-   `@healing_agent(test_command="pytest tests/test_loader.py")` or
-   `tests=[...]`); after a heal, run them automatically and reject the fix on
-   failure. This is the KISS-compatible verification step: the tests already
-   exist in the host application, Healing Agent only runs them.
-   *Acceptance: a heal that breaks a declared validation test never reaches
-   the source tree.*
-2. **Host-level GitHub flow so fixes are never lost** — turn the already-saved
-   patch + provenance sidecar into a branch, commit, and draft pull request
-   via an explicit host-level script/Action (token stays host-supplied,
-   never in the healed process or LLM context; never pushes to the default
-   branch). This moves verified heals toward production instead of leaving
-   them in `_healing_agent_fixes/`.
-3. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
+The unifying design is the two-axis **verify & apply pipeline** — ordered
+verification gates before any mutation, and a single APPLY policy switch for
+where accepted candidates land. See the full specification in
+[docs/apply-verify-design.md](docs/apply-verify-design.md).
+
+1. **VERIFY chain before apply** — move the behavioral check (re-run with
+   original arguments) to an isolated copy BEFORE the live file is touched;
+   gates are ordered and all must pass: `syntax` → `rerun` → optional
+   `tests` / `command:<cmd>` / `pr-checks`.
+   *Acceptance: no candidate reaches the working tree unless every configured
+   gate passes.*
+2. **Function-documented validation tests** (`tests` gate) — the application
+   declares which of its own tests validate a supervised function
+   (`@healing_agent(TEST_COMMAND="pytest tests/test_loader.py")`); failure
+   rejects the fix. The tests already exist in the host app; Healing Agent
+   only runs them. *Acceptance: a heal that breaks a declared validation test
+   never reaches the source tree.*
+3. **PR flow with repository CI as the zero-config gate** (`pr-checks` +
+   `APPLY="pr"`) — branch → commit patch → push → draft PR built from the
+   redacted provenance sidecar; optionally wait for the repository's OWN CI
+   on the PR, continue locally with the candidate on green, and let GitHub
+   native auto-merge (branch protection + required checks) land it. On red,
+   the PR stays open for humans and the original error propagates — never
+   continue silently. No per-function test declarations needed: the existing
+   CI suite is the verification. Token stays host-level; never push to the
+   default branch. *Acceptance: a scheduled job broken by drift at night has
+   a CI-verified, merged fix and a successful re-run by morning, with zero
+   bespoke test configuration.*
+4. **One subprocess boundary for everything external** — verification
+   (`command:` gate), external apply (`APPLY="command"`, the community
+   mutation-backend hook), and the PR delivery itself all speak the same
+   versioned JSON protocol; `GIT_MODE` and `MUTATION_BACKEND` are absorbed as
+   branches of the APPLY switch with backwards-compatible aliases. External
+   engines (e.g. Aether) earn "verified backend" status by passing the live
+   data-drift acceptance suite through the hook.
+5. **Proposal-only as a first-class API** — a `RepairResult` (status, error,
    proposal, diff, attempts, evidence, artifact paths); `report`/`propose`/
    `verify`/`apply` modes with `apply` as compatibility default; changed-line
    and allowed-path policies. *Acceptance: a failed run raises the original
    error and still leaves a machine-readable repair report.*
-4. **Verify in isolation** — apply candidates in a temp worktree, compile and
-   run a configured test command with timeout, replay the failing input plus
-   regression cases, reject out-of-scope edits. *Acceptance: no candidate
-   reaches the working tree unless every configured gate passes.*
-5. **Business contracts** — optional per-function contracts (invariants,
+6. **Business contracts** — optional per-function contracts (invariants,
    forbidden changes, related tests); executable assertions are authoritative
    over prose. Repairs may never delete or weaken supplied tests.
-6. **Classify before asking an LLM** — separate application bugs from
+7. **Classify before asking an LLM** — separate application bugs from
    transient provider/dependency/environment failures; deterministic recovery
    (retry/backoff/fallback) first; replace direct `AUTO_SYSCHANGE` installs
    with a reviewable, policy-gated dependency proposal.
-7. **Modern provider layer** — small adapter protocol, structured repair
+8. **Modern provider layer** — small adapter protocol, structured repair
    output instead of Markdown parsing, scheduled compatibility matrix with
    published tested model IDs.
-8. **Honest benchmark** — small bug suites including adversarial cases where a
+9. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
    false-fix rate, attempts, latency, cost, and diff size.
 
