@@ -2,6 +2,7 @@ import os
 import shutil
 from datetime import datetime
 from typing import Optional
+from .console import emit
 
 def create_backup(context: dict) -> Optional[str]:
     """
@@ -34,7 +35,7 @@ def create_backup(context: dict) -> Optional[str]:
         return backup_path
         
     except Exception as e:
-        print(f"⚠ Warning: Failed to create backup: {str(e)}")
+        emit(f"⚠ Warning: Failed to create backup: {str(e)}")
         return None
 
 
@@ -72,5 +73,5 @@ def restore_backup(backup_path: str, target_path: str) -> bool:
         return True
 
     except Exception as e:
-        print(f"⚠ Warning: Failed to restore {target_path} from backup: {str(e)}")
+        emit(f"⚠ Warning: Failed to restore {target_path} from backup: {str(e)}")
         return False

@@ -1,6 +1,7 @@
 import os
 import datetime
 from typing import Optional
+from .console import emit
 
 def save_ai_fix(context: dict) -> Optional[str]:
     """
@@ -37,9 +38,9 @@ def save_ai_fix(context: dict) -> Optional[str]:
             return file_path
 
         except Exception as write_error:
-            print(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}")
+            emit(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}")
             return None
 
     except Exception as save_error:
-        print(f"♣ Failed to save AI fix: {str(save_error)}")
+        emit(f"♣ Failed to save AI fix: {str(save_error)}")
         return None 

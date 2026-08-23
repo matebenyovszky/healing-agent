@@ -4,6 +4,7 @@ import httpx
 import requests
 import openai
 from functools import wraps
+from .console import emit
 
 def handle_connection_errors(provider_name: str):
     """Simple decorator to handle connection errors with basic logging"""
@@ -19,28 +20,28 @@ def handle_connection_errors(provider_name: str):
                 ConnectionError,
                 TimeoutError
             ) as e:
-                print(f"♣ Connection error in {provider_name}: {str(e)}")
+                emit(f"♣ Connection error in {provider_name}: {str(e)}")
                 # Wait briefly before retrying
                 time.sleep(2)
                 try:
                     return func(*args, **kwargs)
                 except Exception as retry_error:
-                    print(f"♣ Retry failed for {provider_name}: {str(retry_error)}")
+                    emit(f"♣ Retry failed for {provider_name}: {str(retry_error)}")
                     raise
             except openai.APIConnectionError as e:
                 if 'OpenAI' in provider_name or 'Azure' in provider_name:
-                    print(f"♣ Connection error in {provider_name}: {str(e)}")
+                    emit(f"♣ Connection error in {provider_name}: {str(e)}")
                     # Wait briefly before retrying
                     time.sleep(2)
                     try:
                         return func(*args, **kwargs)
                     except Exception as retry_error:
-                        print(f"♣ Retry failed for {provider_name}: {str(retry_error)}")
+                        emit(f"♣ Retry failed for {provider_name}: {str(retry_error)}")
                         raise
                 else:
                     raise
             except Exception as e:
-                print(f"♣ Unexpected error in {provider_name}: {str(e)}")
+                emit(f"♣ Unexpected error in {provider_name}: {str(e)}")
                 raise
         return wrapper
     return decorator
@@ -66,7 +67,7 @@ def _get_azure_response(prompt: str, config: Dict, system_prompt: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except openai.APIError as e:
-        print(f"♣ Azure API error: {str(e)}")
+        emit(f"♣ Azure API error: {str(e)}")
         raise
 
 @handle_connection_errors("OpenAI")
@@ -89,7 +90,7 @@ def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except openai.APIError as e:
-        print(f"♣ OpenAI API error: {str(e)}")
+        emit(f"♣ OpenAI API error: {str(e)}")
         raise
 
 @handle_connection_errors("Anthropic")
@@ -113,7 +114,7 @@ def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> st
         response = client.messages.create(**request_kwargs)
         return response.content[0].text
     except Exception as e:
-        print(f"♣ Anthropic API error: {str(e)}")
+        emit(f"♣ Anthropic API error: {str(e)}")
         raise
 
 @handle_connection_errors("Ollama")
@@ -132,7 +133,7 @@ def _get_ollama_response(prompt: str, config: Dict) -> str:
         response.raise_for_status()
         return response.json()['response']
     except requests.exceptions.RequestException as e:
-        print(f"♣ Ollama API error: {str(e)}")
+        emit(f"♣ Ollama API error: {str(e)}")
         raise
 
 @handle_connection_errors("LiteLLM")
@@ -161,7 +162,7 @@ def _get_litellm_response(prompt: str, config: Dict, system_prompt: str) -> str:
         return response.choices[0].message.content.strip()
         
     except Exception as e:
-        print(f"♣ LiteLLM API error: {str(e)}")
+        emit(f"♣ LiteLLM API error: {str(e)}")
         raise
 
 def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") -> str:
@@ -206,5 +207,5 @@ def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") 
             raise ValueError(f"Unsupported AI provider: {provider}")
             
     except Exception as e:
-        print(f"♣ Error getting AI response: {str(e)}")
+        emit(f"♣ Error getting AI response: {str(e)}")
         raise

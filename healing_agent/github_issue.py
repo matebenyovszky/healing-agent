@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 from typing import Any, Dict, Optional
+from .console import emit
 
 GITHUB_API = "https://api.github.com"
 FINGERPRINT_MARKER = "healing-agent-fingerprint:"
@@ -126,14 +127,14 @@ def _anonymize(payload: str, config: Dict[str, Any]) -> Optional[str]:
     try:
         response = get_ai_response(prompt, config, system_role="report")
     except Exception as error:
-        print(f"♣ Issue anonymization failed, omitting the attachment: {error}")
+        emit(f"♣ Issue anonymization failed, omitting the attachment: {error}")
         return None
 
     cleaned = re.sub(r"^```[a-zA-Z0-9_-]*\s*|\s*```$", "", response.strip())
     try:
         json.loads(cleaned)
     except Exception:
-        print("♣ Issue anonymization did not return valid JSON, omitting it")
+        emit("♣ Issue anonymization did not return valid JSON, omitting it")
         return None
     return cleaned
 
@@ -242,7 +243,7 @@ def find_existing_issue(
             if fingerprint in (issue.get("body") or ""):
                 return issue.get("html_url")
     except Exception as error:
-        print(f"♣ Could not check for an existing issue: {error}")
+        emit(f"♣ Could not check for an existing issue: {error}")
     return None
 
 
@@ -265,13 +266,13 @@ def open_issue_for_failure(
             str((context.get("error") or {}).get("file") or "")
         )
         if not repo:
-            print("♣ Issue escalation skipped: no GitHub repository configured/detected")
+            emit("♣ Issue escalation skipped: no GitHub repository configured/detected")
             return None
 
         token = _resolve_token(config)
         if not token:
             env_name = github_config.get("token_env") or "GITHUB_TOKEN"
-            print(
+            emit(
                 f"♣ Issue escalation skipped: no token in ${env_name} and no gh CLI login"
             )
             return None
@@ -281,7 +282,7 @@ def open_issue_for_failure(
 
         existing = find_existing_issue(repo, token, issue["fingerprint"], label)
         if existing:
-            print(f"♣ Failure already tracked, no duplicate opened: {existing}")
+            emit(f"♣ Failure already tracked, no duplicate opened: {existing}")
             return existing
 
         response = requests.post(
@@ -299,9 +300,9 @@ def open_issue_for_failure(
         )
         response.raise_for_status()
         url = response.json().get("html_url")
-        print(f"♣ Failure escalated to GitHub issue: {url}")
+        emit(f"♣ Failure escalated to GitHub issue: {url}")
         return url
 
     except Exception as error:
-        print(f"♣ Issue escalation failed: {error}")
+        emit(f"♣ Issue escalation failed: {error}")
         return None

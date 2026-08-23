@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 import shutil
+from .console import emit
 
 def copy_config(user_config_path):
     """
@@ -20,7 +21,7 @@ def copy_config(user_config_path):
         raise FileNotFoundError(f"♣ Config template not found at: {example_config}")
         
     shutil.copy(example_config, user_config_path)
-    print(f"♣ Created new config file at, please update the values: {user_config_path}")
+    emit(f"♣ Created new config file at, please update the values: {user_config_path}")
     return user_config_path
 
 def load_config(local_config_path=None):
@@ -40,7 +41,7 @@ def load_config(local_config_path=None):
         config_path = Path(user_config)
     else:
         # Create default config
-        print("♣ No config file found. Creating default configuration...")
+        emit("♣ No config file found. Creating default configuration...")
         config_path = Path(copy_config(user_config))
 
     # Load config module
@@ -124,8 +125,8 @@ def validate_config(config):
                     missing_settings.append(setting)
                     
         if missing_settings:
-            print(f"♣ Config validation failed. Missing settings: {', '.join(missing_settings)}")
-            print("♣ Current config keys:", list(config.keys()))
+            emit(f"♣ Config validation failed. Missing settings: {', '.join(missing_settings)}")
+            emit("♣ Current config keys:", list(config.keys()))
             raise ValueError(f"Missing required settings: {', '.join(missing_settings)}")
 
         # Validate types
@@ -148,5 +149,5 @@ def validate_config(config):
         return config
         
     except Exception as e:
-        print(f"♣ Error loading config: {str(e)}")
+        emit(f"♣ Error loading config: {str(e)}")
         raise

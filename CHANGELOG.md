@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- **Console output can no longer replace the application's exception.** Healing
+  Agent decorates its messages with `♣`, `⚕️` and `✧`, which a cp1252 console —
+  the Windows default, inherited by any redirected stdout such as a scheduled
+  job's log file — cannot encode. A raw `print()` raised `UnicodeEncodeError`
+  from inside the healing path, and because the error branch printed too, that
+  encoding error propagated *instead of* the application's own exception,
+  breaking the project's central guarantee. All library output now goes through
+  `healing_agent.console.emit()`, which degrades to a lossy transliteration
+  rather than raising. Found by a live end-to-end run; the test suite never hit
+  it because pytest captures stdout through a UTF-8 capable buffer
+
 ### Added
 - GitHub issue escalation: with `GITHUB["issue_on_failure"] = True`, a failure
   healing could not repair opens an issue in the application's own repository,
@@ -20,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repeated occurrences do not open repeated issues. Open labelled issues are
   listed for matching rather than queried through the search API, whose
   indexing lag would leak duplicates in exactly the rapid-repeat case
+
+- `docs/benchmark.md`: the repair benchmark design — one scenario dataset
+  shared with the acceptance suite, an outcome taxonomy that separates a real
+  repair from a `false-fix` and a correct refusal from a `fabricated` value,
+  the model × sampling-parameter × prompt-variant matrix with `pass^k`
+  reliability reporting, and the four library changes it depends on
 
 ### Changed
 - Nothing removed or renamed; escalation is opt-in and defaults to off.
@@ -57,7 +75,9 @@ was removed or changed. One default BEHAVIOR change is called out below.
   results, and to hosted products such as Sentry Seer
 - ROADMAP: incident memory (make the artifact directories readable evidence
   instead of write-only exhaust), issue→PR agent interoperability, a
-  `healing-agent run script.py` outside-in runner for 1.0, and the guardrail
+  `healing-agent run script.py` outside-in runner for 1.0, `APPLY="ask"`,
+  a `healing-agent doctor` provider/config check, a concrete route from the
+  data-drift suite to a reproducible published benchmark, and the guardrail
   that a repair may never edit the tests that judge it
 
 ### Changed

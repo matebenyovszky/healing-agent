@@ -2,6 +2,7 @@ import ast
 import re
 from typing import Dict, Any
 from .ai_broker import get_ai_response
+from .console import emit
 
 def ensure_healing_agent_decorator(code: str) -> str:
     """
@@ -118,20 +119,20 @@ def validate_fixed_code(fixed_code: str) -> bool:
         
         # Basic checks for common issues
         if not fixed_code.strip():
-            print("♣ Generated code is empty")
+            emit("♣ Generated code is empty")
             return False
             
         if "def " not in fixed_code:
-            print("♣ Generated code doesn't contain function definition")
+            emit("♣ Generated code doesn't contain function definition")
             return False
             
         return True
         
     except SyntaxError as e:
-        print(f"♣ Syntax error in generated code: {str(e)}")
+        emit(f"♣ Syntax error in generated code: {str(e)}")
         return False
     except Exception as e:
-        print(f"♣ Validation error: {str(e)}")
+        emit(f"♣ Validation error: {str(e)}")
         return False
 
 def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
@@ -175,7 +176,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
             except SyntaxError:
                 single_function = True  # let validate_fixed_code report it
             if not single_function:
-                print(
+                emit(
                     "♣ Generated code is not a single function definition"
                     + (", retrying once" if generation_attempt == 0 else "")
                 )
@@ -188,17 +189,17 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
             if validate_fixed_code(fixed_code):
                 return fixed_code
 
-            print(
+            emit(
                 "♣ Generated fix failed validation"
                 + (", retrying once" if generation_attempt == 0 else "")
             )
         return
 
     except Exception as e:
-        print(f"♣ Error during code fixing: {str(e)}")
-        print(f"♣ Error type: {type(e).__name__}")
-        print(f"♣ Error details: {repr(e)}")
-        print(f"♣ Error traceback:")
+        emit(f"♣ Error during code fixing: {str(e)}")
+        emit(f"♣ Error type: {type(e).__name__}")
+        emit(f"♣ Error details: {repr(e)}")
+        emit(f"♣ Error traceback:")
         import traceback
         traceback.print_exc()
         return
