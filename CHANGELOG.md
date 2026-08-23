@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- GitHub issue escalation: with `GITHUB["issue_on_failure"] = True`, a failure
+  healing could not repair opens an issue in the application's own repository,
+  so the attempt is not lost and an issue→PR agent or a human can answer with
+  a pull request. The escalation reports the ORIGINAL application failure, not
+  a later failure of the agent's own candidate
+- Three issue detail levels (`GITHUB["issue_detail"]`): `reference` (default,
+  no captured values leave the machine), `redacted`, and `ai-anonymized`
+- Failure deduplication: an invisible fingerprint built from the exception
+  type, function qualname, repository-relative path, the failing line's TEXT
+  (not its number) and the exception message with digits normalized, so
+  repeated occurrences do not open repeated issues. Open labelled issues are
+  listed for matching rather than queried through the search API, whose
+  indexing lag would leak duplicates in exactly the rapid-repeat case
+
+### Changed
+- Nothing removed or renamed; escalation is opt-in and defaults to off.
+  Escalation problems are logged and never replace the application's own
+  exception
+
 ## [0.3.1] - 2026-08-23
 No breaking changes: no configuration key, import path, or function signature
 was removed or changed. One default BEHAVIOR change is called out below.

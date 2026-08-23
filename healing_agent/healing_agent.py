@@ -12,6 +12,7 @@ from .config_loader import load_config
 from .exception_handler import capture_context
 from .exception_saver import save_context
 from .git_patch_saver import apply_git_patch, save_git_patch
+from .github_issue import open_issue_for_failure
 from .redactor import redact
 
 
@@ -41,6 +42,18 @@ def _register_backup(file_path: str, backup_path: Optional[str]) -> None:
     session["backups"].setdefault(file_path, backup_path)
 
 
+def _register_failure_context(context: Dict[str, Any]) -> None:
+    """Keep the FIRST captured context of the session for escalation.
+
+    Later attempts describe failures of the agent's own candidates; the first
+    one is the original application error that will be re-raised.
+    """
+    session = _healing_session.get()
+    if session is None:
+        return
+    session.setdefault("context", context)
+
+
 def _restore_session_sources(session: Dict[str, Any]) -> None:
     """Undo every file mutation performed during a failed healing session."""
     for file_path, backup_path in session["backups"].items():
@@ -63,7 +76,7 @@ def healing_agent(
                 session = _healing_session.get()
                 session_token = None
                 if session is None:
-                    session = {"backups": {}, "restore_enabled": True}
+                    session = {"backups": {}, "restore_enabled": True, "config": {}}
                     session_token = _healing_session.set(session)
                 healed_successfully = False
                 try:
@@ -73,6 +86,7 @@ def healing_agent(
                         session["restore_enabled"] = bool(
                             config.get("RESTORE_ON_FAILURE", True)
                         )
+                        session["config"] = config
 
                     repair_key = _repair_key(func)
                     attempts = _repair_attempts.get()
@@ -119,8 +133,16 @@ def healing_agent(
                     # A definitive failure must not leave a half-healed source
                     # file behind; the candidate stays in _healing_agent_fixes/.
                     if session_token is not None:
-                        if not healed_successfully and session["restore_enabled"]:
-                            _restore_session_sources(session)
+                        if not healed_successfully:
+                            if session["restore_enabled"]:
+                                _restore_session_sources(session)
+                            # Plan B: escalate so the failure is not lost. The
+                            # helper is a no-op unless issue_on_failure is set,
+                            # and never raises over the application's error.
+                            if session.get("context") is not None:
+                                open_issue_for_failure(
+                                    session["context"], session["config"]
+                                )
                         _healing_session.reset(session_token)
 
                 # AUTO_FIX=False, an invalid proposal, or an unavailable reload
@@ -168,6 +190,10 @@ def _attempt_healing(
     context = redact(context, config)
     if config.get("DEBUG"):
         print("♣ Context redacted for secrets before AI/disk usage")
+
+    # Escalation should describe the original application failure, not a
+    # later failure of the agent's own candidate.
+    _register_failure_context(context)
 
     hint = generate_hint(context, config)
     context["ai_hint"] = hint

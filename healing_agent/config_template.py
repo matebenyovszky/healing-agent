@@ -89,17 +89,24 @@ GIT_MODE = "off"
 GIT_PATCH_DIR = None  # Optional directory for patch + JSON provenance artifacts
 GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 
-# GitHub Integration (preparation)
-# --------------------------------
-# Groundwork for the 0.4+ propose/verify/apply pipeline: issue escalation on
-# failure and the PR delivery flow (see docs/apply-verify-design.md).
+# GitHub Integration
+# ------------------
+# Escalation for failures healing could not repair: an issue in your own
+# repository turns the attempt into work an agent or a human can pick up.
+# The PR delivery flow is still groundwork (see docs/apply-verify-design.md).
 # SECURITY: never put a token VALUE in this file - "token_env" names the
 # environment variable that holds it (or authenticate via the gh CLI).
 GITHUB = {
     "repo": None,                  # "owner/name"; None = detect from the git remote
     "token_env": "GITHUB_TOKEN",   # NAME of the env var holding the token, never the value
-    "issue_on_failure": False,     # open a GitHub issue when healing fails (not yet implemented)
-    "issue_detail": "reference",   # reference | redacted | ai-anonymized (see design doc)
+    "issue_on_failure": False,     # open an issue when healing definitively fails
+    # How much leaves the machine:
+    #   reference     - error/function identity + pointers to local artifacts
+    #                   (no captured values; note the exception MESSAGE is included)
+    #   redacted      - also attach the redacted context JSON
+    #   ai-anonymized - also attach a context JSON with values replaced by an AI pass
+    "issue_detail": "reference",
+    "issue_label": "healing-agent",  # label used for the issue and for deduplication
 }
 
 # Secret Redaction Configuration
