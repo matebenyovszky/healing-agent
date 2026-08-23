@@ -17,6 +17,15 @@ separate — a version number follows from what a release contains, and that
 milestone spans several minor releases.
 
 ### Fixed
+- **The LiteLLM provider leaked its endpoint into the whole process.** It set
+  `litellm.api_base`, a module-level global, so a configured API base outlived
+  the call and applied to every later LiteLLM call — including calls made by
+  other code sharing the interpreter. It is now passed per request
+- The `openai` package is no longer imported at `ai_broker` import time. It is
+  needed only by the azure and openai providers, and an Ollama-only or
+  LiteLLM-only install should not fail on a package it never calls. The
+  connection-error handling that referenced `openai.APIConnectionError`
+  resolves it lazily and behaves exactly as before when openai is installed
 - **Hint prompts leaked the capture wrapper into the model's reading of
   arguments.** Captured arguments were interpolated as the raw structure
   `{'payload': {'value': ..., 'type': 'dict'}}`, and the model was observed
@@ -135,6 +144,16 @@ milestone spans several minor releases.
   produces exactly the request earlier releases sent. For Anthropic, `params`
   overrides the block-level `temperature` / `max_tokens` shorthands, so one
   config can be swept across settings without being rewritten
+- **Per-session model usage ledger** (`healing_agent/usage_ledger.py`). A
+  repair is several model calls — a hint, a fix, a retry — and until now
+  nothing could answer what one repair cost. Each call is recorded for the
+  duration of the healing session (provider, model, seconds, prompt and
+  completion tokens), the totals go into the saved fix artifact, and `DEBUG`
+  prints them. Deliberate limits: counts only, never prompt or completion
+  text, because the artifact is meant to be shareable; a provider that reports
+  no usage leaves `None` instead of a zero that would read as "free", and a
+  total mixing reported and unreported calls is marked `partial`; no prices
+  are baked in, since they change faster than releases
 - `AI_PROVIDER` in the shipped template now reads `HEALING_AGENT_PROVIDER`
   from the environment (default unchanged), so a benchmark sweep or a
   multi-provider setup can switch providers without editing the config file

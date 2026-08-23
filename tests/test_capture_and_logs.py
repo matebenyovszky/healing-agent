@@ -36,7 +36,10 @@ def test_capture_writes_a_redacted_snapshot(tmp_path, monkeypatch):
         raising=False,
     )
 
-    password = "hunter2"          # must be redacted by name
+    # Deliberately unused: the point is that a local named `password` is
+    # captured and redacted by NAME, which requires it to exist and nothing
+    # more. Hence the noqa - the lint rule is right in general, wrong here.
+    password = "hunter2"          # noqa: F841 - must be redacted by name
     order_count = 7               # must survive
     path = capture_module.capture("supplier response", CAPTURE_DIR=str(tmp_path))
 

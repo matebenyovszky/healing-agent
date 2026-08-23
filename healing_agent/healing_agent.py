@@ -16,6 +16,7 @@ from .github_issue import open_issue_for_failure
 from .log_buffer import arm_from_config_if_requested, recent_records
 from .redactor import redact
 from .console import emit
+from . import usage_ledger
 
 
 # The default must NOT be a mutable dict: a ContextVar default is a single
@@ -86,9 +87,13 @@ def healing_agent(
                 # nest through the reloaded, still-decorated function.
                 session = _healing_session.get()
                 session_token = None
+                usage_token = None
                 if session is None:
                     session = {"backups": {}, "restore_enabled": True, "config": {}}
                     session_token = _healing_session.set(session)
+                    # Token accounting is scoped to the same outermost session,
+                    # so one repair's cost covers every nested attempt it made.
+                    usage_token = usage_ledger.start()
                 healed_successfully = False
                 try:
                     config, _ = load_config()
@@ -144,6 +149,8 @@ def healing_agent(
                     # A definitive failure must not leave a half-healed source
                     # file behind; the candidate stays in _healing_agent_fixes/.
                     if session_token is not None:
+                        if (session.get("config") or {}).get("DEBUG"):
+                            emit(f"♣ Model usage: {usage_ledger.describe()}")
                         if not healed_successfully:
                             if session["restore_enabled"]:
                                 _restore_session_sources(session)
@@ -155,6 +162,7 @@ def healing_agent(
                                     session["context"], session["config"]
                                 )
                         _healing_session.reset(session_token)
+                        usage_ledger.reset(usage_token)
 
                 # AUTO_FIX=False, an invalid proposal, or an unavailable reload
                 # must never turn an application failure into an implicit None.
