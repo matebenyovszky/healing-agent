@@ -8,7 +8,7 @@
 # Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
 import os
 
-HEALING_AGENT_CONFIG_VERSION = "0.3.0"
+HEALING_AGENT_CONFIG_VERSION = "0.3.1"
 AI_PROVIDER = "azure"  
 
 # Azure OpenAI Configuration

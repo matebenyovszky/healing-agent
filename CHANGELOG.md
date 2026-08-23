@@ -5,7 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.1] - 2026-08-23
+No breaking changes: no configuration key, import path, or function signature
+was removed or changed. One default BEHAVIOR change is called out below.
+
+### Fixed
+- Code backups taken within the same second no longer overwrite each other;
+  backup filenames now carry microsecond precision. Previously a second
+  repair attempt within the same second destroyed the backup holding the
+  original pre-healing source — exactly the file needed for a rollback
+
 ### Added
 - `RESTORE_ON_FAILURE` (default `True`): when healing fails definitively
   (`MAX_ATTEMPTS` exhausted, repaired module still failing, or an invalid
@@ -19,10 +28,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   specification (unified response envelope, verify gates, APPLY policies,
   repository-CI gate, issue escalation with privacy levels)
 
-### Fixed
-- Code backups taken within the same second no longer overwrite each other;
-  backup filenames now carry microsecond precision. Previously a second
-  repair attempt could destroy the backup holding the original source
+### Changed
+- **Behavior change (opt-out available):** a failed healing session now leaves
+  the source file byte-identical to its pre-healing state instead of keeping
+  the last mutated revision. Set `RESTORE_ON_FAILURE = False` to preserve the
+  previous behavior and inspect the mutated file
 
 ## [0.3.0] - 2026-08-15
 ### Added

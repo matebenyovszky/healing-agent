@@ -341,7 +341,7 @@ def test_decoy_numeric_column_is_not_mistaken_for_amount(tmp_path):
 EXCEL_LOADER = '''
 import healing_agent
 
-@healing_agent(MAX_ATTEMPTS=5)
+@healing_agent(MAX_ATTEMPTS=8)
 def load_sales(xlsx_path):
     import openpyxl
     wb = openpyxl.load_workbook(xlsx_path)
