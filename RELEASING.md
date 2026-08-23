@@ -43,6 +43,16 @@ release, a ruff finding, a failing test, or a build whose artifacts do not
 match the declared version. Every one of those is cheap to fix now and
 impossible to fix after upload, because **a PyPI version can never be reused**.
 
+It runs `pytest -m "not live"`. The live data-healing scenarios call a real
+model, so they measure the quality of a generated repair rather than the
+correctness of this code; a model having a bad minute must not be able to
+block a release, and CI cannot run them at all. Run them as evidence when the
+data-healing behavior changed:
+
+```bash
+python -m pytest -m live -v
+```
+
 `--publish` pushes the `vX.Y.Z` tag. That tag is the trigger: the
 [Publish Python Package](.github/workflows/python-publish.yml) workflow builds
 from that commit, runs the tests again, and uploads to PyPI through Trusted

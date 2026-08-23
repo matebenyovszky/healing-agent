@@ -42,9 +42,16 @@ def _ai_ready() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _ai_ready(), reason="No usable AI provider configured (live demo test)"
-)
+pytestmark = [
+    # `live` marks what a live model decides rather than what this library
+    # decides: these scenarios pass or fail on the quality of a generated
+    # repair, so they are evidence, not a gate. Release preflight and any
+    # deterministic run use `-m "not live"`.
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not _ai_ready(), reason="No usable AI provider configured (live demo test)"
+    ),
+]
 
 
 # --- Scenario fixtures -------------------------------------------------------
