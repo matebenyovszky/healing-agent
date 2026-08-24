@@ -131,16 +131,6 @@ GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 #   ordered gates : [["python", "checks/verify_loader.py"], ["ruff", "check"]]
 VERIFY_COMMAND = None
 VERIFY_TIMEOUT_SECONDS = 120
-# What the gate can see:
-#   file    - a temp directory holding the candidate FILE alone (default, cheap)
-#   project - a filtered copy of the project AS IT IS NOW, candidate applied,
-#             so the application's own test suite can run:
-#                 VERIFY_SCOPE = "project"
-#                 VERIFY_COMMAND = ["python", "-m", "pytest", "tests/test_loader.py"]
-#             The working tree is copied rather than checked out from git HEAD,
-#             so the verdict is about the code that is actually running.
-#             Falls back to "file" if the project is too large to copy.
-VERIFY_SCOPE = "file"
 
 # GitHub Integration
 # ------------------

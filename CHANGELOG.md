@@ -5,25 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-### Added
-- **`VERIFY_SCOPE = "project"`: verification gates can now run the
-  application's own test suite.** The shipped gate isolates the candidate file
-  alone, which a self-contained checker can use but a project-level test run
-  cannot — a test imports siblings, reads fixtures and expects its package
-  layout. The project scope copies the project as it exists right now, applies
-  the candidate to its copy, and runs the gate there, so
-  `VERIFY_COMMAND = ["python", "-m", "pytest", "tests/test_loader.py"]` finally
-  means what the documentation always claimed. Default stays `file`, so nothing
-  changes for existing configurations
-- `healing_agent/workspace.py`: the isolation primitive both scopes share. It
-  copies the WORKING TREE rather than using `git worktree`, deliberately — a
-  worktree checks out `HEAD`, so with uncommitted changes the gate would pass
-  judgment on code other than the code that is running. Recreatable and
-  generated directories are excluded, and a size guard makes it refuse and fall
-  back to the file scope rather than stalling a repair while copying a data
-  directory
-
 ## [0.4.1] - 2026-08-24
 No breaking changes. Adds the first externally contributed feature and corrects
 documentation that promised more than the implementation delivers.

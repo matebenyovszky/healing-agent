@@ -182,7 +182,7 @@ GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded 
 
 # Verification gates: run before the live file changes, exit code 0 accepts
 VERIFY_COMMAND = None     # e.g. ["python", "checks/verify_loader.py"]; list of lists = ordered gates
-VERIFY_SCOPE = "file"     # file = candidate alone | project = filtered copy of the project, so your own tests can run
+                          # runs on a copy of the candidate FILE, so use a self-contained checker
 VERIFY_TIMEOUT_SECONDS = 120
 
 # Observation (see "Observing without a failure" above)

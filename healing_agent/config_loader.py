@@ -259,8 +259,6 @@ def validate_config(config):
             raise ValueError("GIT_PATCH_DIR must be a path string or None")
         if config.get('VERIFY_COMMAND') is not None and not isinstance(config.get('VERIFY_COMMAND'), (str, list, tuple)):
             raise ValueError("VERIFY_COMMAND must be a command string, argument list, or None")
-        if config.get('VERIFY_SCOPE', 'file') not in {'file', 'project'}:
-            raise ValueError("VERIFY_SCOPE must be one of: file, project")
         if (
             isinstance(config.get('VERIFY_TIMEOUT_SECONDS'), bool)
             or not isinstance(config.get('VERIFY_TIMEOUT_SECONDS', 120), (int, float))

@@ -31,7 +31,6 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Sequence
 
-from . import workspace as workspace_module
 from .code_replacer import function_replacer
 from .console import emit
 
@@ -58,12 +57,11 @@ def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str,
         emit(f"♣ Verify gate skipped missing source file: {source}")
         return False
 
-    prepared = _prepare_workspace(source, config)
-    if prepared is None:
-        return False
-    workspace, working_dir, candidate_path = prepared
+    with tempfile.TemporaryDirectory(prefix="healing-agent-verify-") as workspace:
+        working_dir = Path(workspace)
+        candidate_path = working_dir / source.name
+        shutil.copy2(source, candidate_path)
 
-    try:
         candidate_context = dict(context)
         candidate_context["error"] = dict(context.get("error", {}))
         candidate_context["error"]["file"] = str(candidate_path)
@@ -79,7 +77,6 @@ def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str,
                 "protocol": "healing-agent-candidate-v1",
                 "source_file": str(candidate_path),
                 "original_file": str(source),
-                "working_dir": str(working_dir),
                 "context": candidate_context,
             },
             default=str,
@@ -88,34 +85,8 @@ def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str,
         for command in commands:
             if not _run_command_gate(command, working_dir, env, config):
                 return False
-        return True
-    finally:
-        shutil.rmtree(workspace, ignore_errors=True)
 
-
-def _prepare_workspace(source: Path, config: Dict[str, Any]):
-    """Build the workspace the gates run in, honoring VERIFY_SCOPE.
-
-    Returns ``(workspace_to_remove, working_dir, candidate_file)``. The project
-    scope falls back to the file scope when the tree is too large to copy, so a
-    misjudged scope degrades the gate's reach rather than failing the repair.
-    """
-    scope = str(config.get("VERIFY_SCOPE", "file")).lower()
-    if scope not in {"file", "project"}:
-        raise VerifyGateConfigurationError(
-            f'VERIFY_SCOPE must be "file" or "project", got {scope!r}'
-        )
-
-    if scope == "project":
-        prepared = workspace_module.copy_project(source)
-        if prepared is not None:
-            return prepared
-
-    try:
-        return workspace_module.copy_single_file(source)
-    except OSError as copy_error:
-        emit(f"♣ Verify gate could not prepare a workspace: {copy_error}")
-        return None
+    return True
 
 
 def _verify_commands(value: Any) -> List[Any]:

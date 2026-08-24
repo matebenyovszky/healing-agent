@@ -75,17 +75,25 @@ full specification in
    results — sample, then filter by execution, instead of steering a single
    attempt through an agent loop. Worth adding only when the benchmark
    (item 13) can show it beats one candidate plus one retry, per unit cost.
-2. **One unified `command` verify gate** — [x] shipped in 0.4.1 (contributed
-   in [#1](https://github.com/matebenyovszky/healing-agent/pull/1)) and
-   extended with `VERIFY_SCOPE`: any command run in an isolated workspace,
-   pass = exit 0, with the scope deciding what it can see — the candidate file
-   alone (`file`, default) or a filtered copy of the project (`project`) so the
-   application's own test suite can run. No separate "tests" gate: a test run
-   IS a command. A gate that cannot start raises rather than rejecting, so a
+2. **One unified `command` verify gate** — [x] shipped in 0.4.1, contributed
+   in [#1](https://github.com/matebenyovszky/healing-agent/pull/1). Any
+   command runs in a temporary workspace holding the candidate file, pass =
+   exit 0; a gate that cannot start raises rather than rejecting, so a
    misconfiguration never masquerades as a bad candidate.
    *Acceptance met: a heal that fails the declared verify command never
-   reaches the source tree, verified by tests that assert the live file is
+   reaches the source tree, verified by tests asserting the live file is
    byte-identical after a rejection.*
+   - [ ] **Project-scope gating — available on request, not built by default.**
+         Running the application's own test suite as a gate needs the whole
+         project in the workspace, which was prototyped and dropped: copying a
+         tree carries a long tail of failure modes (size, symlinks,
+         permissions, untracked `.env` files, virtualenv assumptions), each of
+         which becomes a support question about someone else's layout. If
+         asked for, build it as a filtered copy of the WORKING TREE — not a
+         `git worktree`, which checks out HEAD and would judge code other than
+         the code that is running — with a size guard falling back to the
+         file scope. The zero-configuration alternative already designed is
+         item 3: let the repository's own CI run the suite on a PR.
 3. **PR flow with repository CI as the zero-config gate** (`pr-checks` +
    `APPLY="pr"`) — branch → commit patch → push → draft PR built from the
    redacted provenance sidecar; optionally wait for the repository's OWN CI

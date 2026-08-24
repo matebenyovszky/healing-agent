@@ -272,24 +272,36 @@ There is deliberately no separate "tests" gate: an application test run IS a
 command. One gate type covers self-contained checkers, hidden-test engines,
 linters, or anything else that can express pass/fail as an exit code.
 
-**Workspace scope.** `VERIFY_SCOPE` decides what a gate can see:
+**Workspace scope — deliberately limited.** The gate runs in a temporary
+directory holding the candidate FILE alone. That serves a self-contained
+checker, a sandbox engine or a linter, and it is all the gate does.
 
-| Scope | Workspace | Serves |
-|---|---|---|
-| `file` (default) | a temp directory holding the candidate file alone | self-contained checkers, sandbox engines |
-| `project` | a filtered copy of the project as it is now, candidate applied | the application's own test suite |
+An application's own test suite needs more: a test imports siblings, reads
+fixtures and expects its package layout. Making that work means placing the
+whole project in the workspace with one file swapped, and an earlier draft of
+this document used `pytest tests/test_loader.py` as the example while only the
+file scope existed — which could not work, and failed as a *rejection*,
+discarding valid repairs.
 
-The project scope copies the WORKING TREE rather than using `git worktree`,
-deliberately: a worktree checks out `HEAD`, so with uncommitted changes — the
-normal state of a machine someone is working on — the gate would judge code
-other than the code that is running. It refuses and falls back to `file` when
-the tree exceeds a size guard, so a misjudged scope costs the gate its reach
-rather than failing the repair.
+That capability was prototyped and then deliberately dropped, because copying
+a project tree brings a long tail of failure modes — size, symlinks,
+permissions, untracked files such as `.env` that the copy would not contain,
+assumptions about where the virtualenv lives — and each of them turns into a
+support question about someone else's repository layout. The gate is more
+useful being small and predictable.
 
-An earlier draft of this document used `pytest tests/test_loader.py` as the
-example while only the file scope existed. That was wrong twice over: it could
-not work, and it failed as a *rejection*, discarding valid repairs. With
-`VERIFY_SCOPE = "project"` the example is now true.
+If the capability is wanted, this is how it should be built, and the choice is
+not obvious: copy the WORKING TREE, not a `git worktree`. A worktree checks
+out `HEAD`, so on any machine with uncommitted changes the gate would pass
+judgment on code other than the code that is running. A filtered copy with a
+size guard, falling back to the file scope when the tree is too large, is the
+variant whose verdict is about the program in front of us. Ask, and it can be
+added behind an opt-in setting.
+
+The zero-configuration way to get the full suite as a gate is different and
+already designed: let the repository's own CI run it on a pull request
+(`pr-checks` below). The project already has that infrastructure; duplicating
+it locally is what this note declines to do.
 
 `pr-checks` is the zero-config profile: no per-function declarations — the
 whole existing suite validates the repair, using infrastructure the team
