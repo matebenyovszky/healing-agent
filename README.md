@@ -14,6 +14,8 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 - 💡 AI-generated fixing hints and repaired code, multi-provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM)
 - 📊 **Data Healing**: adapts loaders to structurally drifted input while old inputs keep working (see below)
 - 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
+- 🙋 **Ask for a repair, don't wait for a crash**: call `request_healing(reason)` from a handled error branch
+- 🎫 **GitHub escalation**: a failure it could not repair opens an issue in your own repository, deduplicated, so the attempt is never lost
 - 🔒 Secret redaction before anything is sent to a provider or written to disk
 - 💾 Backups before every fix, exception context saved to JSON, optional reviewable `git apply` patches
 - 🔧 Zero-config integration: import, decorate, run
@@ -134,6 +136,25 @@ def your_function():
 
 Run your script as usual. On an exception, Healing Agent captures context, generates and (by default) applies a fix, and re-executes. Context, backups, and fixes are saved next to your script in `_healing_agent_*` folders.
 
+### Asking for a repair without a crash
+
+Not every failure worth repairing arrives as an exception. A loader usually *detects* the problem itself — a column is missing, a payload has the wrong shape — and handles it in an `if`. That branch can ask for a repair directly:
+
+```python
+@healing_agent
+def load_sales(rows):
+    if "amount" not in rows[0]:
+        healing_agent.request_healing(
+            "input has no 'amount' column; the value is present under a different header",
+            details={"headers_seen": sorted(rows[0])},
+        )
+    return sum(int(row["amount"]) for row in rows)
+```
+
+There is no second pipeline behind this: `request_healing` raises `HealingRequested`, the decorator catches it like any other exception, and context capture, redaction, the fix prompt, the verify gates, apply, rollback and escalation all behave as they already do. What changes is what the model is told — that the program asked deliberately, and *why*. An exception says where execution stopped; a reason says what was expected.
+
+If healing succeeds, the repaired function's result is returned to your caller. If it does not, `HealingRequested` propagates: a program that asked a question deserves to hear that it went unanswered, rather than receiving a silent `None`.
+
 ### Observing without a failure
 
 The same evidence that powers a repair is useful on its own — knowing every variable at the moment an API call returned something unexpected is often the whole debugging session:
@@ -160,6 +181,35 @@ A ring buffer can only hold what was recorded *before* the failure, so it has to
 ⚠️ Log messages are free text, so name-based redaction cannot see inside them — `logger.info(f"token={t}")` would reach the provider. Keep it off unless you trust your log messages.
 
 **What is *not* sent:** the captured `variables` block (locals and globals — about 2.5 KB of a typical 8 KB context) is saved to disk but deliberately never included in a prompt, because it would roughly double the ~990-token fix prompt on every nested attempt. Giving the model tools to *request* specific variables or log lines instead is [ROADMAP](ROADMAP.md) item 7.
+
+## When healing fails: escalate to GitHub 🎫
+
+A failure Healing Agent cannot repair should not vanish into a log. With one setting it opens an issue in your application's own repository, so the attempt becomes work a person — or an issue→PR agent — can pick up:
+
+```python
+GITHUB = {
+    "repo": None,                    # "owner/name"; None = detect from the git remote
+    "token_env": "GITHUB_TOKEN",     # NAME of the env var holding the token, never the value
+    "issue_on_failure": True,
+    "issue_detail": "reference",     # reference | redacted | ai-anonymized
+}
+```
+
+The issue carries the error type and message, the function, the repository-relative location, the failing line, and the analysis Healing Agent generated. The original exception still propagates — an opened issue is never treated as a fix.
+
+**Deduplication.** A job failing every minute must not open 1440 issues. Each issue carries an invisible fingerprint built from the exception type, the function, the repository-relative path, the failing line's *text* (not its number, which shifts on every edit) and the message with digits normalised — so `row 5 failed` and `row 812 failed` are one issue, while `KeyError: 'amount'` and `KeyError: 'osszeg'` stay separate, because two drifted columns are two problems. A repeat occurrence finds the open issue and adds nothing.
+
+**How much leaves the machine is your choice:**
+
+| `issue_detail` | The issue contains |
+|---|---|
+| `reference` (default) | identity and pointers to the local artifacts — no captured values are uploaded, though note the exception *message* is included, and `KeyError: 'customer_tax_id'` is itself a disclosure |
+| `redacted` | additionally the redacted context JSON (arguments, locals, traceback) |
+| `ai-anonymized` | additionally a context JSON where an extra AI pass replaced values with placeholders |
+
+On an internal repository the richer levels are a gift rather than a risk, which is why all three exist instead of one cautious default.
+
+**The token is never in your config file.** `token_env` names the environment variable that holds it, and `gh` CLI authentication is used as a fallback. `healing_agent_config.py` stays free of secrets.
 
 ## Configuration ⚙️
 

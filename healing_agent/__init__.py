@@ -1,11 +1,15 @@
 from ._version import CONFIG_SCHEMA_VERSION, __version__
 from .capture import capture as _capture
 from .healing_agent import healing_agent as _healing_agent
+from .request import HealingRequested as _HealingRequested
+from .request import request_healing as _request_healing
 from .log_buffer import disable_log_capture as _disable_log_capture
 from .log_buffer import enable_log_capture as _enable_log_capture
 
 _PUBLIC = [
     'healing_agent',
+    'request_healing',
+    'HealingRequested',
     'capture',
     'enable_log_capture',
     'disable_log_capture',
@@ -20,6 +24,9 @@ class HealingAgentModule:
         self.healing_agent = _healing_agent
         # Observation entry points: evidence without a failure, and the
         # optional ring buffer of the application's own log records.
+        # Ask for a repair from a handled error branch, not only by raising.
+        self.request_healing = _request_healing
+        self.HealingRequested = _HealingRequested
         self.capture = _capture
         self.enable_log_capture = _enable_log_capture
         self.disable_log_capture = _disable_log_capture

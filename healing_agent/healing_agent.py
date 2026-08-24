@@ -15,6 +15,7 @@ from .git_patch_saver import apply_git_patch, save_git_patch
 from .github_issue import open_issue_for_failure
 from .log_buffer import arm_from_config_if_requested, recent_records
 from .redactor import redact
+from .request import HealingRequested
 from .console import emit
 from .verify_gate import verify_candidate
 from . import usage_ledger
@@ -210,6 +211,14 @@ def _attempt_healing(
     context = redact(context, config)
     if config.get("DEBUG"):
         emit("♣ Context redacted for secrets before AI/disk usage")
+
+    # A deliberate request carries intent an exception cannot: the program
+    # states what it expected, not merely where it stopped.
+    if isinstance(error, HealingRequested):
+        context["healing_request"] = {
+            "reason": error.reason,
+            "details": error.details,
+        }
 
     # Optional narrative: what the application was doing before it broke.
     recent_logs = recent_records(config)

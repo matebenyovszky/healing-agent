@@ -78,6 +78,23 @@ Module: {function_info.get('module')}
     if context.get('ai_hint'):
         ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
 
+    # A deliberate request carries intent, which an exception does not: the
+    # program says what it expected, not merely where it stopped.
+    healing_request = ""
+    if context.get('healing_request'):
+        request = context['healing_request']
+        healing_request = (
+            "\nThe program did not crash: it detected the problem itself and "
+            "explicitly requested a repair.\n"
+            f"Stated reason: {request.get('reason')}\n"
+        )
+        if request.get('details') is not None:
+            healing_request += f"Supporting details: {request.get('details')}\n"
+        healing_request += (
+            "Repair the function so this condition is handled correctly rather "
+            "than re-raising the request.\n"
+        )
+
     # What the application was doing before it broke (only when log capture
     # is armed; see healing_agent.enable_log_capture).
     recent_logs = ""
@@ -98,7 +115,7 @@ Error Line: {context['error'].get('error_line')}
 
 {error_details}
 {traceback_info}
-{func_info}{arg_info}{recent_logs}{ai_hint}
+{func_info}{arg_info}{healing_request}{recent_logs}{ai_hint}
 
 Return only the fixed code without any explanations or markdown formatting.
 Return exactly ONE top-level function definition. Place any imports and helper functions INSIDE the function body, never at module level.

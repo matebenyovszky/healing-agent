@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+### Added
+- **`healing_agent.request_healing(reason, details=...)`: ask for a repair from
+  a handled error branch.** Until now only an escaping exception could reach
+  the healing loop, but a loader usually detects the problem itself — a missing
+  column, a reshaped payload — and handles it in an `if`. That branch can now
+  ask directly. It raises `HealingRequested`, which the decorator catches like
+  any other exception, so there is no second pipeline: capture, redaction,
+  hint, fix prompt, verify gates, apply, rollback and escalation are unchanged.
+  What changes is what the model is told — the program's stated reason and
+  optional supporting details, which carry intent an exception cannot. If
+  healing succeeds the repaired result is returned; if it does not,
+  `HealingRequested` propagates rather than becoming a silent `None`
+- The GitHub escalation shipped in 0.4.0 is finally documented in the README —
+  it worked and was live-verified, but nothing outside the config template
+  mentioned it, so it was undiscoverable
+
 ## [0.4.1] - 2026-08-24
 No breaking changes. Adds the first externally contributed feature and corrects
 documentation that promised more than the implementation delivers.

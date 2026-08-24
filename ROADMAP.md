@@ -48,6 +48,18 @@ Next steps (each one scenario + at most a prompt/context change):
   pagination drift; drift-aware prompts; decorator-preserving replacement;
   bounded generation retry.
 
+## How healing is triggered
+
+- [x] **An escaping exception** from a decorated function — the original path.
+- [x] **A handled error branch** — `healing_agent.request_healing(reason,
+      details=...)` lets code that detected the problem itself ask for a
+      repair. It raises `HealingRequested`, which the decorator catches, so the
+      existing loop is reused rather than duplicated; the stated reason reaches
+      the model, which an exception's location cannot express.
+- [ ] **A failed validation contract** — the same entry point, called by an
+      adapter around a schema validator, so a validation failure becomes a
+      repair request without the application writing the `if`.
+
 ## Short term: repairs that can be trusted
 
 *Milestone names and version numbers are deliberately separate. A version
