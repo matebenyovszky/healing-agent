@@ -138,32 +138,70 @@ params = { temperature = 0.2 }
 
 ## What has to change in the library first
 
-The benchmark is mostly harness code, but four small things in
-`healing_agent/` block it today. Each is independently useful:
+The benchmark is mostly harness code, but four things in `healing_agent/`
+block it. Each is independently useful, and three of them have shipped:
 
-1. **Provider selectable per run.** `AI_PROVIDER` is a literal in the config
-   file; the model IDs already read environment variables. The runner needs
-   either `AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")` in the
-   template, or a documented `load_config(local_config_path=...)` path it can
-   point at a generated per-cell config. The second already exists — the
-   first is one line and helps every user with more than one provider.
-2. **Sampling parameters passed through.** `_get_azure_response` and
-   `_get_openai_response` send no temperature; `_get_ollama_response` sends no
-   `options` block at all, so temperature, `seed` and `num_ctx` cannot be set
-   for local models. Without this, "test different model settings" is not
-   expressible. A `params` dict per provider block, forwarded verbatim, is
-   the smallest change that covers all of them.
-3. **Token usage captured.** The provider responses carry `usage`; it is
-   discarded. Keeping prompt/completion counts in the repair artifacts gives
-   the cost column for free, and is worth having outside the benchmark too.
-4. **Prompt variants selectable.** The fix and hint prompts are string
-   literals inside `ai_code_fixer.py` and `ai_hint_generator.py`. To A/B them
-   they need to be addressable — a `prompts/` directory with named variants
-   and a `PROMPT_VARIANT` setting, defaulting to today's text so nothing
-   changes for existing users.
+1. **Provider selectable per run — shipped ✅.** `AI_PROVIDER` in the shipped
+   template now reads `HEALING_AGENT_PROVIDER` from the environment (default
+   unchanged), and `load_config(local_config_path=...)` already accepts a
+   generated per-cell config file for anything the environment cannot express.
+2. **Sampling parameters passed through — shipped ✅.** Every provider block
+   accepts a `params` dict, forwarded verbatim: request keyword arguments for
+   Azure/OpenAI/Anthropic/LiteLLM, and Ollama's `options` object — which
+   previously received nothing at all, so temperature, `seed` and `num_ctx`
+   could not be set for local models. Absent or empty `params` sends exactly
+   what earlier releases sent, so a sweep cannot silently shift the baseline.
+3. **Token usage captured — shipped ✅.** `healing_agent/usage_ledger.py`
+   records one entry per model call for the duration of a healing session
+   (provider, model, seconds, prompt/completion tokens) and the totals are
+   written into the saved fix artifact. Counts only: no prompt or completion
+   text enters the ledger, because the artifact is meant to be shareable. A
+   provider that reports no usage leaves `None` rather than a zero, and a
+   total mixing reported and unreported calls is flagged `partial`.
+   **Prices are deliberately not in the library** — they change faster than
+   releases; tokens are the durable fact, and `models.toml` carries the rate.
+4. **Prompt variants selectable — not yet.** The fix and hint prompts are
+   string literals inside `ai_code_fixer.py` and `ai_hint_generator.py`. To
+   A/B them they must be addressable: a `prompts/` directory with named
+   variants and a `PROMPT_VARIANT` setting, defaulting to today's text so
+   nothing changes for existing users.
 
-Item 2 is the one that unlocks the local-model experiments; item 4 is what
-turns the benchmark from "which model" into "which prompt".
+Items 1–3 are what the local-model experiments needed; item 4 is what turns
+the benchmark from "which model" into "which prompt".
+
+## Running a sweep today
+
+The matrix runner does not exist yet, but the library is already
+parameterizable, so the acceptance suite can be pointed at any model:
+
+```bash
+# one local model, one setting
+HEALING_AGENT_PROVIDER=ollama OLLAMA_MODEL=qwen2.5-coder:7b \
+    python -m pytest tests/test_data_drift.py -v
+```
+
+Sampling settings live in the config file, because they are per provider:
+
+```python
+OLLAMA = {
+    "host": os.getenv("OLLAMA_HOST", "http://localhost:11434"),
+    "model": os.getenv("OLLAMA_MODEL", "qwen2.5-coder:7b"),
+    "timeout": 300,                       # local models are slower than APIs
+    "params": {"temperature": 0.2, "seed": 7, "num_ctx": 8192},
+}
+```
+
+Two failure modes to rule out before blaming the model:
+
+- **`num_ctx` too small.** The default context window of a local model can be
+  shorter than the captured context, which truncates the evidence silently.
+  The result looks like a repair failure and is a setup failure.
+- **`timeout` too short.** The 120 s default is generous for an API and tight
+  for a 32B model on consumer hardware.
+
+Set `DEBUG = True` and each healing session prints its own usage line
+(`♣ Model usage: 3 model call(s), 41.2s, tokens in/out: 5120/860`), which is
+the per-repair cost the benchmark will aggregate.
 
 ## Phasing
 

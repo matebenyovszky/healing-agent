@@ -16,6 +16,8 @@ from .github_issue import open_issue_for_failure
 from .log_buffer import arm_from_config_if_requested, recent_records
 from .redactor import redact
 from .console import emit
+from .verify_gate import verify_candidate
+from . import usage_ledger
 
 
 # The default must NOT be a mutable dict: a ContextVar default is a single
@@ -86,9 +88,13 @@ def healing_agent(
                 # nest through the reloaded, still-decorated function.
                 session = _healing_session.get()
                 session_token = None
+                usage_token = None
                 if session is None:
                     session = {"backups": {}, "restore_enabled": True, "config": {}}
                     session_token = _healing_session.set(session)
+                    # Token accounting is scoped to the same outermost session,
+                    # so one repair's cost covers every nested attempt it made.
+                    usage_token = usage_ledger.start()
                 healed_successfully = False
                 try:
                     config, _ = load_config()
@@ -144,6 +150,8 @@ def healing_agent(
                     # A definitive failure must not leave a half-healed source
                     # file behind; the candidate stays in _healing_agent_fixes/.
                     if session_token is not None:
+                        if (session.get("config") or {}).get("DEBUG"):
+                            emit(f"♣ Model usage: {usage_ledger.describe()}")
                         if not healed_successfully:
                             if session["restore_enabled"]:
                                 _restore_session_sources(session)
@@ -155,6 +163,7 @@ def healing_agent(
                                     session["context"], session["config"]
                                 )
                         _healing_session.reset(session_token)
+                        usage_ledger.reset(usage_token)
 
                 # AUTO_FIX=False, an invalid proposal, or an unavailable reload
                 # must never turn an application failure into an implicit None.
@@ -273,6 +282,13 @@ def _attempt_healing(
     if not config.get("AUTO_FIX", True) or not fixed_code:
         return False, None
 
+    if config.get("DEBUG"):
+        emit(f"♣ Attempting to update file: {context['error']['file']}")
+        emit(f"♣ Replacing function: {context['error']['function_name']}")
+
+    if not verify_candidate(context, fixed_code, config):
+        return False, None
+
     if config.get("BACKUP_ENABLED", True):
         saved_backup = create_backup(context)
         context["backup_path"] = saved_backup
@@ -281,10 +297,6 @@ def _attempt_healing(
         _register_backup(context["error"]["file"], saved_backup)
         if config.get("DEBUG"):
             emit(f"♣ Created backup in backup folder: {saved_backup}")
-
-    if config.get("DEBUG"):
-        emit(f"♣ Attempting to update file: {context['error']['file']}")
-        emit(f"♣ Replacing function: {context['error']['function_name']}")
 
     if git_mode == "apply":
         if not context.get("git_patch_path"):
