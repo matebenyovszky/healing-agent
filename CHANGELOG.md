@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-08-24
+No breaking changes. Adds the first externally contributed feature and corrects
+documentation that promised more than the implementation delivers.
+
+### Added
+- **Verification gates (`VERIFY_COMMAND`)** — contributed by @foxprint666 in
+  [#1](https://github.com/matebenyovszky/healing-agent/pull/1), the project's
+  first external contribution. An optional command runs BEFORE the live source
+  file is changed: the candidate is applied to an isolated copy in a temporary
+  workspace, the command runs there, and the exit code decides (0 accepts).
+  Protocol-aware verifiers may read the redacted candidate context from
+  `HEALING_AGENT_CANDIDATE` and print JSON detail to stdout, but the exit code
+  is the source of truth. Several gates run in order as a list of argument
+  lists. Windows command splitting and list-form commands are handled, and
+  `VERIFY_COMMAND` / `VERIFY_TIMEOUT_SECONDS` are validated like `GIT_MODE`
+
+### Fixed
+- A verify gate that cannot start (a typo, a missing executable, several
+  commands packed into one argument list) now raises
+  `VerifyGateConfigurationError` instead of reporting "candidate rejected". The
+  old behavior would silently block every repair while looking like the model
+  kept producing broken code, so the operator would never learn that the
+  command was simply misconfigured
+- Corrected documentation that over-promised the gate: `pytest tests/...` was
+  the example in both the config template and the design document, but the
+  workspace holds the candidate FILE alone, so a project-level test run cannot
+  execute there — and it failed as a *rejection*, discarding valid repairs. The
+  example is now a self-contained checker, and the scope is stated in the
+  module docstring, the config template and the design document. Full-project
+  isolation (a filtered copy of the working tree — not a `git worktree`, which
+  checks out HEAD and would judge code other than the one running) is the next
+  step for this gate
+
 ## [0.4.0] - 2026-08-24
 **Nothing breaks.** No configuration key, import path or function signature was
 removed or changed; every new setting is opt-in and defaults to the previous

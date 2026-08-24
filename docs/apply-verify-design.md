@@ -265,12 +265,20 @@ outward-facing artifacts need real tests before they are trusted.
 |---|---|---|---|
 | `syntax` | `compile()` + single-function AST check | ms | none (always on) |
 | `rerun` | execute the candidate with the original arguments on an ISOLATED copy (temp import), never the live file | ms–s | none (default on) |
-| `command` | run ANY command inside the isolated workspace where the candidate is already applied; **exit code 0 = pass**. `pytest tests/test_loader.py` needs no protocol at all; protocol-aware engines (e.g. Aether in check mode) can read the candidate-context JSON from the `HEALING_AGENT_CANDIDATE` env var, and MAY print a JSON object to stdout (`{"ok": false, "error": "hidden test failed"}`) which is logged as structured detail — but the exit code alone decides. Configurable globally (`VERIFY_COMMAND`) or per function (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")` — the decorator's existing local-config merge already carries it). | s | one command line |
+| `command` | **shipped.** Run any command in a temporary workspace holding the candidate FILE with the repair already applied; **exit code 0 = pass**, and a command that cannot start is a configuration error rather than a verdict. Protocol-aware engines (e.g. Aether in check mode) can read the redacted candidate context from the `HEALING_AGENT_CANDIDATE` env var and MAY print a JSON object to stdout (`{"ok": false, "error": "hidden test failed"}`) for detail — the exit code alone decides. Set globally (`VERIFY_COMMAND`) or per function via the decorator's local-config merge. Ordered gates: a list of argument lists. | s | one command line |
 | `pr-checks` | open a PR from the candidate and treat the repository's OWN CI as the gate | minutes | **none** — the CI already exists |
 
 There is deliberately no separate "tests" gate: an application test run IS a
-command. One gate type covers pytest, hidden-test engines, linters, or
-anything else that can express pass/fail as an exit code.
+command. One gate type covers self-contained checkers, hidden-test engines,
+linters, or anything else that can express pass/fail as an exit code.
+
+**Workspace scope, honestly.** The shipped gate isolates the candidate FILE,
+not the project, so a project-level test run cannot execute in it — an earlier
+draft of this document used `pytest tests/test_loader.py` as the example and
+was wrong to. Running the application's own suite needs the whole project
+present with one file swapped, which means a filtered copy of the WORKING TREE
+(not a `git worktree`, which checks out HEAD and would quietly judge different
+code than the one that is running). That is the next step for this gate.
 
 `pr-checks` is the zero-config profile: no per-function declarations — the
 whole existing suite validates the repair, using infrastructure the team

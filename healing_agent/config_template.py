@@ -13,7 +13,7 @@ import os
 # renamed or removed, and is then set to the release that ships that change.
 # healing_agent compares it with its own CONFIG_SCHEMA_VERSION on load and
 # fills in any behavior key this file predates, so an older config keeps working.
-HEALING_AGENT_CONFIG_VERSION = "0.4.0"
+HEALING_AGENT_CONFIG_VERSION = "0.4.1"
 AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")
 
 # Sampling parameters
@@ -116,11 +116,20 @@ GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 
 # Verification gate configuration
 # -------------------------------
-# Optional ordered command gates run on an isolated candidate copy BEFORE the
-# live source file is changed. Exit code 0 means pass; any nonzero exit rejects
-# the candidate. Protocol-aware tools may read HEALING_AGENT_CANDIDATE and print
-# JSON detail to stdout, but the exit code decides.
-VERIFY_COMMAND = None  # e.g. "pytest tests/test_loader.py" or ["python", "check.py"]
+# Optional ordered command gates run BEFORE the live source file is changed.
+# Exit code 0 accepts the candidate; any nonzero exit rejects it. Protocol-aware
+# tools may read HEALING_AGENT_CANDIDATE and print JSON detail to stdout, but
+# the exit code decides. A command that cannot start is treated as a
+# configuration error, not as a rejected candidate.
+#
+# SCOPE: the gate runs in a temporary directory containing the candidate FILE
+# alone, with the repair applied. A self-contained checker works; a
+# project-level test run (e.g. pytest over your test directory) does not, since
+# the rest of the project is not there. Full-project isolation is on the roadmap.
+#
+#   one gate      : ["python", "checks/verify_loader.py"]
+#   ordered gates : [["python", "checks/verify_loader.py"], ["ruff", "check"]]
+VERIFY_COMMAND = None
 VERIFY_TIMEOUT_SECONDS = 120
 
 # GitHub Integration

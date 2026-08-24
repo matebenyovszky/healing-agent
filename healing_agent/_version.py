@@ -30,7 +30,7 @@ from typing import Tuple
 #: Configuration schema version. Bump ONLY when config_template.py gains,
 #: renames or removes a key, and set it to the release that ships that change.
 #: ``tests/test_version.py`` enforces that config_template.py agrees with this.
-CONFIG_SCHEMA_VERSION = "0.4.0"
+CONFIG_SCHEMA_VERSION = "0.4.1"
 
 try:
     __version__ = _distribution_version("healing_agent")

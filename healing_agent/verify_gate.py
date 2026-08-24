@@ -1,3 +1,27 @@
+"""
+Verification gates: judge a candidate before the live source file changes.
+
+A gate is any command. Exit code 0 accepts the candidate, anything else
+rejects it. Protocol-aware verifiers may read the redacted candidate context
+from the ``HEALING_AGENT_CANDIDATE`` environment variable and print a JSON
+object to stdout for detail, but the exit code alone decides.
+
+    VERIFY_COMMAND = ["python", "checks/verify_loader.py"]   # one gate
+    VERIFY_COMMAND = [["python", "checks/a.py"], ["ruff", "check"]]  # ordered gates
+
+**Scope of the workspace.** The gate runs in a temporary directory that holds
+the candidate file alone, with the repair already applied to it. That is
+enough for a self-contained checker, and it is why a project-level test
+command (``pytest tests/test_loader.py``) does NOT work here: the rest of the
+project is not present. Full-project isolation — a filtered copy of the
+working tree, so the tests run against exactly the code that is live plus the
+candidate — is tracked separately in the roadmap.
+
+A command that cannot start is a configuration error, not a verdict on the
+candidate: it raises ``VerifyGateConfigurationError`` rather than quietly
+rejecting every repair.
+"""
+
 import json
 import os
 import shlex
@@ -9,6 +33,17 @@ from typing import Any, Dict, Iterable, List, Sequence
 
 from .code_replacer import function_replacer
 from .console import emit
+
+
+class VerifyGateConfigurationError(RuntimeError):
+    """The gate itself is misconfigured, as opposed to the candidate failing.
+
+    Kept distinct on purpose: a gate that cannot even start (a typo, a
+    missing executable, several commands packed into one argument list)
+    would otherwise look exactly like "the candidate is bad" and silently
+    block every repair. Raising surfaces the operator error, while the
+    decorator still re-raises the application's own exception.
+    """
 
 
 def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str, Any]) -> bool:
@@ -106,8 +141,11 @@ def _run_command_gate(
         emit(f"♣ Verify gate timed out: {argv[0]}")
         return False
     except OSError as exc:
-        emit(f"♣ Verify gate could not start {argv[0]!r}: {exc}")
-        return False
+        raise VerifyGateConfigurationError(
+            f"verify gate command could not start: {argv[0]!r} ({exc}). "
+            "Check VERIFY_COMMAND - use an argument list, and a list of "
+            "lists for several gates."
+        ) from exc
 
     detail = _json_detail(result.stdout)
     if result.returncode == 0:
