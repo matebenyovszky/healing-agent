@@ -16,6 +16,7 @@ from .github_issue import open_issue_for_failure
 from .log_buffer import arm_from_config_if_requested, recent_records
 from .redactor import redact
 from .console import emit
+from .verify_gate import verify_candidate
 from . import usage_ledger
 
 
@@ -281,6 +282,13 @@ def _attempt_healing(
     if not config.get("AUTO_FIX", True) or not fixed_code:
         return False, None
 
+    if config.get("DEBUG"):
+        emit(f"♣ Attempting to update file: {context['error']['file']}")
+        emit(f"♣ Replacing function: {context['error']['function_name']}")
+
+    if not verify_candidate(context, fixed_code, config):
+        return False, None
+
     if config.get("BACKUP_ENABLED", True):
         saved_backup = create_backup(context)
         context["backup_path"] = saved_backup
@@ -289,10 +297,6 @@ def _attempt_healing(
         _register_backup(context["error"]["file"], saved_backup)
         if config.get("DEBUG"):
             emit(f"♣ Created backup in backup folder: {saved_backup}")
-
-    if config.get("DEBUG"):
-        emit(f"♣ Attempting to update file: {context['error']['file']}")
-        emit(f"♣ Replacing function: {context['error']['function_name']}")
 
     if git_mode == "apply":
         if not context.get("git_patch_path"):

@@ -257,6 +257,14 @@ def validate_config(config):
             raise ValueError("GIT_MODE must be one of: off, patch, apply")
         if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):
             raise ValueError("GIT_PATCH_DIR must be a path string or None")
+        if config.get('VERIFY_COMMAND') is not None and not isinstance(config.get('VERIFY_COMMAND'), (str, list, tuple)):
+            raise ValueError("VERIFY_COMMAND must be a command string, argument list, or None")
+        if (
+            isinstance(config.get('VERIFY_TIMEOUT_SECONDS'), bool)
+            or not isinstance(config.get('VERIFY_TIMEOUT_SECONDS', 120), (int, float))
+            or config.get('VERIFY_TIMEOUT_SECONDS', 120) <= 0
+        ):
+            raise ValueError("VERIFY_TIMEOUT_SECONDS must be a positive number")
     
         return config
         
