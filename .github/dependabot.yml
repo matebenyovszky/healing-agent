@@ -1,0 +1,23 @@
+version: 2
+updates:
+  # The three workflows pin actions to a major tag; nothing else refreshes them.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "ci"
+
+  # Runtime dependencies are declared as ranges, so Dependabot only opens a PR
+  # when a release moves outside the declared range (a new major, typically) —
+  # exactly the case that deserves a human look.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "deps"
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        patterns: ["*"]

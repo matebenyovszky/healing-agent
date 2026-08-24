@@ -1,6 +1,122 @@
 from pathlib import Path
 import os
 import shutil
+import types
+from .console import emit
+from ._version import CONFIG_SCHEMA_VERSION, parse_version
+
+TEMPLATE_PATH = Path(__file__).with_name('config_template.py')
+
+# Keys that are NEVER auto-filled from the template, because the template only
+# holds placeholders for them. Silently defaulting a credential would turn a
+# clear "you have not configured a provider" into a confusing auth failure.
+_PROVIDER_KEYS = frozenset(
+    {'AI_PROVIDER', 'AZURE', 'OPENAI', 'ANTHROPIC', 'OLLAMA', 'LITELLM'}
+)
+
+# The version marker is descriptive, not a setting: filling it in from the
+# template would make an outdated config claim to be current.
+_SCHEMA_MARKER = 'HEALING_AGENT_CONFIG_VERSION'
+
+# load_config() runs on every healing attempt, so the schema notice is emitted
+# once per process. It is advice about a file, not an event worth repeating.
+_reported_schemas = set()
+
+
+def _emit_once(key, *messages):
+    """Emit a schema notice the first time this process sees it."""
+    if key in _reported_schemas:
+        return
+    _reported_schemas.add(key)
+    for message in messages:
+        emit(message)
+
+
+def _load_module(path, module_name):
+    """Import a standalone Python file and return the module object."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError(f"♣ Could not load config from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _settings_of(module):
+    """Return the configuration settings a config module defines.
+
+    Imports the module pulls in (``import os`` at the top of the template) are
+    module objects, not settings, and must not travel with the config.
+    """
+    return {
+        key: value
+        for key, value in vars(module).items()
+        if not key.startswith('__') and not isinstance(value, types.ModuleType)
+    }
+
+
+def load_template_defaults():
+    """Return the settings the shipped config template defines."""
+    if not TEMPLATE_PATH.exists():
+        raise FileNotFoundError(f"♣ Config template not found at: {TEMPLATE_PATH}")
+    return _settings_of(_load_module(TEMPLATE_PATH, 'healing_agent_config_template'))
+
+
+def reconcile_config_schema(config_vars, config_path=None):
+    """Reconcile a user config with the schema this library expects.
+
+    An older config file is not an error: every behavior key it predates is
+    filled in from the template, so upgrading the library never breaks a
+    working installation. The user is told once, with the exact key names, so
+    the file can be refreshed deliberately instead of silently drifting.
+    """
+    found = config_vars.get(_SCHEMA_MARKER)
+    if parse_version(found) == parse_version(CONFIG_SCHEMA_VERSION):
+        return config_vars
+
+    try:
+        defaults = load_template_defaults()
+    except Exception as template_error:
+        emit(f"♣ Could not read the config template for defaults: {template_error}")
+        return config_vars
+
+    if parse_version(found) > parse_version(CONFIG_SCHEMA_VERSION):
+        _emit_once(
+            ('newer', found),
+            f"♣ Config schema {found} is NEWER than this healing_agent expects "
+            f"({CONFIG_SCHEMA_VERSION}). Unknown settings are ignored; upgrade "
+            f"healing_agent if a setting appears to have no effect.",
+        )
+        return config_vars
+
+    filled = {}
+    for key, value in defaults.items():
+        if key == _SCHEMA_MARKER or key in _PROVIDER_KEYS or key in config_vars:
+            continue
+        config_vars[key] = value
+        filled[key] = value
+
+    described = found if isinstance(found, str) and found else 'unversioned'
+    location = f" ({config_path})" if config_path else ''
+    if filled:
+        _emit_once(
+            ('older', described, tuple(sorted(filled))),
+            f"♣ Config schema {described} predates {CONFIG_SCHEMA_VERSION}"
+            f"{location}; using defaults for: {', '.join(sorted(filled))}",
+            "♣ To adopt them permanently, add the keys to your config file or "
+            "regenerate it from healing_agent/config_template.py",
+        )
+    else:
+        _emit_once(
+            ('complete', described),
+            f"♣ Config schema {described} predates {CONFIG_SCHEMA_VERSION}"
+            f"{location}, but every setting is present. Update "
+            f"{_SCHEMA_MARKER} to \"{CONFIG_SCHEMA_VERSION}\" to silence this.",
+        )
+    return config_vars
+
 
 def copy_config(user_config_path):
     """
@@ -20,7 +136,7 @@ def copy_config(user_config_path):
         raise FileNotFoundError(f"♣ Config template not found at: {example_config}")
         
     shutil.copy(example_config, user_config_path)
-    print(f"♣ Created new config file at, please update the values: {user_config_path}")
+    emit(f"♣ Created new config file at, please update the values: {user_config_path}")
     return user_config_path
 
 def load_config(local_config_path=None):
@@ -40,22 +156,19 @@ def load_config(local_config_path=None):
         config_path = Path(user_config)
     else:
         # Create default config
-        print("♣ No config file found. Creating default configuration...")
+        emit("♣ No config file found. Creating default configuration...")
         config_path = Path(copy_config(user_config))
 
     # Load config module
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("healing_agent_config", config_path)
-    if spec is None:
-        raise ImportError(f"♣ Could not load config from {config_path}")
-        
-    config = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(config)
-    
-    # Get non-private variables from config
-    config_vars = {k: v for k, v in vars(config).items() 
-                  if not k.startswith('__')}
-    
+    config = _load_module(config_path, "healing_agent_config")
+
+    # Get the settings the config file defines
+    config_vars = _settings_of(config)
+
+    # A config written for an older schema keeps working: fill in what it
+    # predates before anything reads or validates the settings.
+    config_vars = reconcile_config_schema(config_vars, config_path)
+
     # Check Azure OpenAI config
     if 'AZURE' in config_vars:
         azure_config = config_vars['AZURE']
@@ -124,8 +237,8 @@ def validate_config(config):
                     missing_settings.append(setting)
                     
         if missing_settings:
-            print(f"♣ Config validation failed. Missing settings: {', '.join(missing_settings)}")
-            print("♣ Current config keys:", list(config.keys()))
+            emit(f"♣ Config validation failed. Missing settings: {', '.join(missing_settings)}")
+            emit("♣ Current config keys:", list(config.keys()))
             raise ValueError(f"Missing required settings: {', '.join(missing_settings)}")
 
         # Validate types
@@ -136,7 +249,7 @@ def validate_config(config):
             if not isinstance(config.get(bool_setting), bool):
                 raise ValueError(f"{bool_setting} must be a boolean value")
 
-        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES', 'GIT_STAGE']:
+        for optional_bool in ['AUTO_SYSCHANGE', 'SAVE_AI_FIXES', 'SAVE_GIT_PATCHES', 'GIT_STAGE', 'RESTORE_ON_FAILURE']:
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
 
@@ -144,9 +257,17 @@ def validate_config(config):
             raise ValueError("GIT_MODE must be one of: off, patch, apply")
         if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):
             raise ValueError("GIT_PATCH_DIR must be a path string or None")
+        if config.get('VERIFY_COMMAND') is not None and not isinstance(config.get('VERIFY_COMMAND'), (str, list, tuple)):
+            raise ValueError("VERIFY_COMMAND must be a command string, argument list, or None")
+        if (
+            isinstance(config.get('VERIFY_TIMEOUT_SECONDS'), bool)
+            or not isinstance(config.get('VERIFY_TIMEOUT_SECONDS', 120), (int, float))
+            or config.get('VERIFY_TIMEOUT_SECONDS', 120) <= 0
+        ):
+            raise ValueError("VERIFY_TIMEOUT_SECONDS must be a positive number")
     
         return config
         
     except Exception as e:
-        print(f"♣ Error loading config: {str(e)}")
+        emit(f"♣ Error loading config: {str(e)}")
         raise

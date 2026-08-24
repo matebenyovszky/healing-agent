@@ -42,9 +42,16 @@ def _ai_ready() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not _ai_ready(), reason="No usable AI provider configured (live demo test)"
-)
+pytestmark = [
+    # `live` marks what a live model decides rather than what this library
+    # decides: these scenarios pass or fail on the quality of a generated
+    # repair, so they are evidence, not a gate. Release preflight and any
+    # deterministic run use `-m "not live"`.
+    pytest.mark.live,
+    pytest.mark.skipif(
+        not _ai_ready(), reason="No usable AI provider configured (live demo test)"
+    ),
+]
 
 
 # --- Scenario fixtures -------------------------------------------------------
@@ -341,7 +348,7 @@ def test_decoy_numeric_column_is_not_mistaken_for_amount(tmp_path):
 EXCEL_LOADER = '''
 import healing_agent
 
-@healing_agent(MAX_ATTEMPTS=5)
+@healing_agent(MAX_ATTEMPTS=8)
 def load_sales(xlsx_path):
     import openpyxl
     wb = openpyxl.load_workbook(xlsx_path)

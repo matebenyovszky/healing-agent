@@ -3,6 +3,7 @@ import json
 import datetime
 import traceback
 from typing import Optional
+from .console import emit
 
 def save_context(context: dict) -> Optional[str]:
     """
@@ -12,6 +13,10 @@ def save_context(context: dict) -> Optional[str]:
         context: Dictionary containing exception context and details
         config: Configuration dictionary with save settings
     """
+    # Bound before the try: if building the path fails, the function must
+    # report the failure by returning None, not raise UnboundLocalError from
+    # the return statement and mask the application's own exception.
+    file_path = None
     try:
         # Create exceptions directory if it doesn't exist
         exceptions_dir_path = os.path.join(os.path.dirname(context['error']['file']), '_healing_agent_exceptions')
@@ -28,10 +33,13 @@ def save_context(context: dict) -> Optional[str]:
                 json.dump(context, f, indent=2, ensure_ascii=False)
 
         except Exception as write_error:
-            print(f"♣ Failed to write exception details to {file_path}: {str(write_error)}")
-            print(f"♣ Write error traceback: {traceback.format_exc()}")
+            emit(f"♣ Failed to write exception details to {file_path}: {str(write_error)}")
+            emit(f"♣ Write error traceback: {traceback.format_exc()}")
+            # Nothing usable was written; do not hand back a path to a file
+            # that does not exist or is half-written.
+            file_path = None
     except Exception as save_error:
-        print(f"♣ Failed to save exception details: {str(save_error)}")
-        print(f"♣ Save error traceback: {traceback.format_exc()}")
+        emit(f"♣ Failed to save exception details: {str(save_error)}")
+        emit(f"♣ Save error traceback: {traceback.format_exc()}")
 
     return file_path

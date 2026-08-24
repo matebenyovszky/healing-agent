@@ -99,7 +99,11 @@ multiple data sources.
 
 Live scenarios are probabilistic: the same scenario can pass one run and miss
 the next, because repair quality depends on the model's generation. Observed
-per-scenario convergence with `gpt-4o-mini` is roughly 85–95% per run. A failed
+per-scenario convergence with `gpt-4o-mini` is roughly 85–95% per run for the
+single-layer scenarios. The three-layer Excel workbook scenario is clearly the
+least reliable — each repair round only discovers the next layer from its own
+error message, so its attempt budget is the widest (`MAX_ATTEMPTS=8`) and it
+still misses occasionally. A failed
 round is a convergence miss, not a broken framework — rerun it, raise
 `MAX_ATTEMPTS`, or use a stronger model for higher first-pass rates. The
 guardrail expectations (never fabricate, old format keeps working) have been

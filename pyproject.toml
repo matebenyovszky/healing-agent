@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "healing_agent"
-version = "0.3.0"
+version = "0.4.0"
 authors = [
     { name = "Máté Benyovszky", email = "benyovszky.mate.work@outlook.com" },
 ]
@@ -50,7 +50,7 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.121.0,<1"]
 litellm = ["litellm>=1.96.2,<2"]
-dev = ["build>=1.2", "hatchling>=1.26", "pytest>=8", "twine>=5"]
+dev = ["build>=1.2", "hatchling>=1.26", "pytest>=8", "ruff>=0.14", "twine>=6.1"]
 
 [project.urls]
 "Homepage" = "https://github.com/matebenyovszky/healing-agent"
@@ -71,3 +71,29 @@ exclude = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+markers = [
+    "live: exercises a real AI provider; the outcome depends on the model, not only on this code",
+]
+
+[tool.ruff]
+target-version = "py310"
+extend-exclude = [".venv", "dist", "tests/_healing_agent_backups"]
+
+[tool.ruff.lint]
+# Deliberately narrow: the rules that catch real defects, not style opinions.
+#   E9  syntax and indentation errors
+#   F   pyflakes - undefined names, unused imports, f-strings without fields
+#   B   bugbear - mutable defaults, except-without-raise, loop-variable capture
+# A style sweep would produce noise across a codebase this size and drown the
+# findings that matter; widen this only with a dedicated formatting commit.
+select = ["E9", "F", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test fixtures embed intentionally broken source code as string literals and
+# generated example code that is not meant to be idiomatic.
+"tests/buggy_code_example.py" = ["F821", "B"]
+# B017 (blind `pytest.raises(Exception)`) is a fair complaint: these tests
+# should assert the ORIGINAL exception type, which is the guarantee they exist
+# to protect. Tightening them is tracked separately; ignoring it here keeps the
+# gate green without pretending the assertions are as strong as they should be.
+"tests/*.py" = ["B017"]

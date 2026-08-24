@@ -14,13 +14,13 @@ import datetime as _datetime
 import difflib
 import hashlib
 import json
-import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
 from .code_replacer import build_replacement_source
+from .console import emit
 
 
 class GitPatchError(RuntimeError):
@@ -257,5 +257,5 @@ def save_git_patch(context: dict) -> Optional[str]:
             return None
         return str(artifact.patch_path)
     except Exception as error:
-        print(f"♣ Failed to save Git patch: {error}")
+        emit(f"♣ Failed to save Git patch: {error}")
         return None

@@ -1,6 +1,8 @@
 import os
 import datetime
 from typing import Optional
+from . import usage_ledger
+from .console import emit
 
 def save_ai_fix(context: dict) -> Optional[str]:
     """
@@ -28,18 +30,23 @@ def save_ai_fix(context: dict) -> Optional[str]:
                 f.write(f"# AI Fix generated on: {datetime.datetime.now()}\n")
                 f.write(f"# Original file: {context['error']['file']}\n")
                 f.write(f"# Function: {func_name}\n")
-                f.write(f"# Error type: {context['error'].get('error_type', 'Unknown')}\n")
-                f.write(f"# Error message: {context['error'].get('error_message', 'Unknown')}\n")
-                f.write(f"# AI Hint: {context.get('ai_hint', 'No hint provided')}\n\n")
+                # capture_context writes these as 'type' and 'message'
+                # (see exception_handler.capture_context)
+                f.write(f"# Error type: {context['error'].get('type', 'Unknown')}\n")
+                f.write(f"# Error message: {context['error'].get('message', 'Unknown')}\n")
+                f.write(f"# AI Hint: {context.get('ai_hint', 'No hint provided')}\n")
+                # Counts only - never prompts. This file sits next to the
+                # redacted context and must be as safe to share as that is.
+                f.write(f"# Model usage so far this session: {usage_ledger.describe()}\n\n")
                 f.write("# Fixed code:\n")
                 f.write(context['fixed_code'])
 
             return file_path
 
         except Exception as write_error:
-            print(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}")
+            emit(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}")
             return None
 
     except Exception as save_error:
-        print(f"♣ Failed to save AI fix: {str(save_error)}")
+        emit(f"♣ Failed to save AI fix: {str(save_error)}")
         return None 

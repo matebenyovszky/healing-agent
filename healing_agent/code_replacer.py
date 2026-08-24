@@ -1,5 +1,6 @@
 import ast
 from typing import Dict, List, Optional, Tuple
+from .console import emit
 
 def decorator_checker(file_path: str) -> bool:
     """
@@ -30,7 +31,7 @@ def decorator_checker(file_path: str) -> bool:
                     
                 start_line = node.lineno
                 end_line = node.end_lineno
-                has_healing_decorator = False
+                # decorator_count below carries the decorator state
                 
                 # Check existing decorators
                 if hasattr(node, 'decorator_list'):
@@ -38,18 +39,18 @@ def decorator_checker(file_path: str) -> bool:
                     for dec in node.decorator_list:
                         if isinstance(dec, ast.Name) and dec.id == 'healing_agent':
                             decorator_count += 1
-                            has_healing_decorator = True
-                            
+
+
                     # Multiple healing_agent decorators found
                     if decorator_count > 1:
                         changes_needed = True
                         function_data.append((start_line, end_line, False, node.name))
-                        print(f"♣ Function {node.name} has multiple healing_agent decorators")
+                        emit(f"♣ Function {node.name} has multiple healing_agent decorators")
                     # No healing_agent decorator found
                     elif decorator_count == 0:
                         changes_needed = True
                         function_data.append((start_line, end_line, True, node.name))
-                        print(f"♣ Function {node.name} missing healing_agent decorator")
+                        emit(f"♣ Function {node.name} missing healing_agent decorator")
                     # Exactly one healing_agent decorator - no change needed
                     else:
                         function_data.append((start_line, end_line, False, node.name))
@@ -57,10 +58,10 @@ def decorator_checker(file_path: str) -> bool:
                     # No decorators at all
                     changes_needed = True
                     function_data.append((start_line, end_line, True, node.name))
-                    print(f"♣ Function {node.name} missing healing_agent decorator")
+                    emit(f"♣ Function {node.name} missing healing_agent decorator")
         
         if not changes_needed:
-            print("♣ All functions have correct healing_agent decorator usage")
+            emit("♣ All functions have correct healing_agent decorator usage")
             return False
             
         # Second pass - make corrections
@@ -70,7 +71,7 @@ def decorator_checker(file_path: str) -> bool:
         
         while i < len(lines):
             should_add = True
-            for start, end, needs_decorator, func_name in function_data:
+            for start, _end, needs_decorator, _func_name in function_data:
                 if i == start - 1:  # Line before function def
                     # Remove extra healing_agent decorators if present
                     while i > 0 and lines[i-1].strip().startswith('@healing_agent'):
@@ -91,11 +92,11 @@ def decorator_checker(file_path: str) -> bool:
         with open(file_path, 'w', encoding='utf-8') as f:
             f.write('\n'.join(new_lines))
             
-        print("♣ Successfully updated healing_agent decorators")
+        emit("♣ Successfully updated healing_agent decorators")
         return True
         
     except Exception as e:
-        print(f"♣ Error checking/correcting decorators: {str(e)}")
+        emit(f"♣ Error checking/correcting decorators: {str(e)}")
         return False
 
 def build_replacement_source(
@@ -106,7 +107,7 @@ def build_replacement_source(
     function_name = context['function_info']['name']
 
     if not all([file_path, function_name, fixed_code]):
-        print("♣ Missing required parameters for code replacement")
+        emit("♣ Missing required parameters for code replacement")
         return None
 
     with open(file_path, 'r', encoding='utf-8') as file:
@@ -117,11 +118,11 @@ def build_replacement_source(
     if len(fixed_tree.body) != 1 or not isinstance(
         fixed_tree.body[0], (ast.FunctionDef, ast.AsyncFunctionDef)
     ):
-        print("♣ Fixed code must contain exactly one function definition")
+        emit("♣ Fixed code must contain exactly one function definition")
         return None
     fixed_function = fixed_tree.body[0]
     if fixed_function.name != function_name:
-        print(
+        emit(
             f"♣ Fixed function name {fixed_function.name} does not match "
             f"{function_name}"
         )
@@ -137,7 +138,7 @@ def build_replacement_source(
             end_line = node.end_lineno
             break
     else:
-        print(f"♣ Could not find function {function_name} in {file_path}")
+        emit(f"♣ Could not find function {function_name} in {file_path}")
         return None
 
     source_lines = source.splitlines(keepends=True)
@@ -197,7 +198,7 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
         return True
 
     except Exception as e:
-        print(f"♣ Error updating file: {str(e)}")
-        print(f"♣ Error type: {type(e).__name__}")
-        print(f"♣ Error details: {repr(e)}")
+        emit(f"♣ Error updating file: {str(e)}")
+        emit(f"♣ Error type: {type(e).__name__}")
+        emit(f"♣ Error details: {repr(e)}")
         return False

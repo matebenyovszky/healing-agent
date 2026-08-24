@@ -59,6 +59,7 @@ def capture_context(
     kwargs: Optional[dict] = None,
     config: Optional[dict] = None,
     error: Optional[Exception] = None,
+    frame: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Captures execution context with or without an exception.
@@ -75,8 +76,7 @@ def capture_context(
     """
 
     # Reset/initialize important variables
-    caller_frame = None
-    exc_type = None 
+    exc_type = None
     exc_value = None
     exc_traceback = None
     trace = None
@@ -132,8 +132,11 @@ def capture_context(
                 'error_traceback': traceback.format_exc()
             }
 
-    # Capture frame information
-    frame = inspect.currentframe().f_back
+    # Capture frame information. An explicit frame lets a caller that is not
+    # the decorator itself (e.g. the public capture() entry point) point at
+    # the frame it actually wants to snapshot.
+    if frame is None:
+        frame = inspect.currentframe().f_back
     if frame:
         # Matcher for name-based secret redaction of variable previews.
         _matcher = get_sensitive_matcher(config)

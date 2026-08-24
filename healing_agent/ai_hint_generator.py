@@ -34,12 +34,30 @@ def generate_hint(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     function_source = function_info.get('source_code', '')
     function_module = function_info.get('module', '')
     
-    # Get function arguments
-    function_arguments = context.get('function_arguments', {})
+    # Get function arguments. Render them explicitly rather than dumping the
+    # capture structure: `{'payload': {'value': ..., 'type': 'dict'}}` invites
+    # the model to read the wrapper keys ('value', 'type') as the argument's
+    # OWN keys, which it has been observed to do.
+    arguments = context.get('function_arguments', {})
+    if isinstance(arguments, dict) and arguments:
+        function_arguments = "\n".join(
+            f"- {name} (type: {data.get('type')}) = {data.get('value')}"
+            if isinstance(data, dict) else f"- {name} = {data}"
+            for name, data in arguments.items()
+        )
+    else:
+        function_arguments = "(none captured)"
     
     # Get environment info
     python_version = context.get('python_version', '')
     platform = context.get('platform', '')
+
+    # What the application was doing before it broke (only when log capture
+    # is armed; see healing_agent.enable_log_capture).
+    recent_logs = ""
+    if context.get('recent_logs'):
+        joined = "\n".join(str(line) for line in context['recent_logs'])
+        recent_logs = f"\nApplication log records leading up to the failure:\n{joined}"
     
     # Prepare the prompt for AI
     prompt = f"""
@@ -72,6 +90,7 @@ Detailed Traceback Frames:
 
 Additional Error Details:
 {error_details}
+{recent_logs}
 
 Based on all the provided context, generate a helpful hint or suggestion for resolving the issue. Consider:
 1. The exact error type and message
