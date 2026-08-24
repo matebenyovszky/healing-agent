@@ -183,13 +183,10 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
     if detail in {"redacted", "ai-anonymized"}:
         # Trim on the way out: the artifact on disk stays rich, the issue body
         # has a hard GitHub limit and a human has to read it.
-        from .exception_handler import prompt_value_limit, trim_values
+        from .evidence import select
 
         payload = json.dumps(
-            trim_values(context, prompt_value_limit(config)),
-            indent=2,
-            ensure_ascii=False,
-            default=str,
+            select(context, config, "issue"), indent=2, ensure_ascii=False, default=str
         )
         if detail == "ai-anonymized":
             payload = _anonymize(payload, config)

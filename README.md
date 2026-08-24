@@ -16,6 +16,7 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 - 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
 - 🙋 **Ask for a repair, don't wait for a crash**: call `request_healing(reason)` from a handled error branch
 - 🎫 **GitHub escalation**: a failure it could not repair opens an issue in your own repository, deduplicated, so the attempt is never lost
+- 🧩 **Methods too**: definitions are found by qualname, so class methods heal like plain functions (nested functions excepted, and refused explicitly)
 - ⚡ **`async def` works the same way**: coroutine functions are healed by the same session, not a parallel one
 - 📝 **Inherits your logging**: output goes to the standard `healing_agent` logger, so your level, handlers and formatters apply — and prints as before if you configured none
 - 🔒 Secret redaction before anything is sent to a provider or written to disk
@@ -208,6 +209,27 @@ There is no second pipeline behind this: `request_healing` raises `HealingReques
 
 If healing succeeds, the repaired function's result is returned to your caller. If it does not, `HealingRequested` propagates: a program that asked a question deserves to hear that it went unanswered, rather than receiving a silent `None`.
 
+### Methods, not just functions
+
+The decorator works the same on a method as on a plain function:
+
+```python
+class SalesLoader:
+    def __init__(self, factor):
+        self.factor = factor
+
+    @healing_agent
+    def load(self, rows):
+        return sum(row["amount"] for row in rows) * self.factor
+```
+
+Definitions are located by `__qualname__`, so `SalesLoader.load` is never confused with a module-level `load`, nested classes work, and the repair is written back at the class's own indentation without touching the rest of the file.
+
+Two limits worth knowing:
+
+- **Functions defined inside other functions cannot be healed.** They exist only while the enclosing call runs, so a reloaded module has nothing to verify against. Healing Agent detects this and refuses *before* touching your source; the generated candidate is still saved under `_healing_agent_fixes/` if you want it.
+- The repaired method is re-run with the instance that was already in flight. Attribute access works; a method that depends on the *identity* of its class (`type(self) is ...`) sees the pre-reload class.
+
 ### Healing async functions
 
 `async def` functions are decorated exactly like synchronous ones:
@@ -268,6 +290,39 @@ A ring buffer can only hold what was recorded *before* the failure, so it has to
 
 **What is *not* sent:** the captured `variables` block (locals and globals — about 2.5 KB of a typical 8 KB context) is saved to disk but deliberately never included in a prompt, because it would roughly double the ~990-token fix prompt on every nested attempt. Giving the model tools to *request* specific variables or log lines instead is [ROADMAP](ROADMAP.md) item 7.
 
+## What evidence goes where 🧾
+
+The same failure context travels to three places with very different economics: an artifact on disk that you may search months later, a prompt paid for by the token on every nested repair attempt, and a GitHub issue with a hard size limit that a human has to read.
+
+**Redaction is not what varies.** One policy runs before anything leaves the capture — names *and* value shapes — so the evidence is equally safe in all three. A destination only chooses how much of it is worth carrying:
+
+```python
+EVIDENCE = {
+    "disk":     {"arguments": 3000, "variables": 3000, "environment": 3000, "logs": 500},
+    "provider": {"arguments": 1000, "variables": 400,  "environment": 300,  "logs": 50},
+    "issue":    {"arguments": 300,  "variables": 300,  "environment": 300,  "logs": 50},
+}
+```
+
+A number includes the section with that limit; `0` or a missing key leaves it out — and leaves it *absent* rather than empty, so a reader can tell "not collected" from "collected and empty". The unit differs because the useful unit differs:
+
+| Section | Unit |
+|---|---|
+| `variables`, `environment`, `arguments` | characters **per value** — every entry is kept and trimmed on its own, so one huge dataframe cannot push the rest of the state out of the report |
+| `logs` | number of most recent **lines** |
+
+The error, the traceback and the function's own source are never optional: a repair prompt without the source cannot produce a repair.
+
+Why this matters in practice — measured on a real captured context, changing only the policy:
+
+| Provider policy | Prompt |
+|---|---|
+| defaults | ~2600 tokens |
+| `{"environment": 0}` | ~1600 tokens |
+| `{"environment": 0, "variables": 100, "logs": 10}` | ~1270 tokens |
+
+The environment is the expensive section and the least useful *to the model* — it is mostly `PATH` and ninety other variables. It is invaluable to a **human** reading an escalated issue, though, which is exactly why the destinations are configured separately.
+
 ## When healing fails: escalate to GitHub 🎫
 
 A failure Healing Agent cannot repair should not vanish into a log. With one setting it opens an issue in your application's own repository, so the attempt becomes work a person — or an issue→PR agent — can pick up:
@@ -315,10 +370,12 @@ RESTORE_ON_FAILURE = True # Roll the source back when healing definitively fails
 SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
 
-# Evidence: one redaction policy everywhere, only the size differs
-CAPTURE_ENVIRONMENT = True   # Environment names always kept, values masked by name AND shape
-CAPTURE_VALUE_CHARS = 3000   # Per value on disk — the artifact stays searchable later
-PROMPT_VALUE_CHARS = 300     # Per value when evidence leaves the machine
+# Evidence: what each destination carries, and how much (see below)
+EVIDENCE = {
+    "disk":     {"arguments": 3000, "variables": 3000, "environment": 3000, "logs": 500},
+    "provider": {"arguments": 1000, "variables": 400,  "environment": 300,  "logs": 50},
+    "issue":    {"arguments": 300,  "variables": 300,  "environment": 300,  "logs": 50},
+}
 GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded git apply)
 
 # Verification gates: run before the live file changes, exit code 0 accepts

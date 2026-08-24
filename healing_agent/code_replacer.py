@@ -107,18 +107,15 @@ def build_replacement_source(
         )
         return None
 
-    for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and (
-            node.name == function_name
-        ):
-            start_line = min(
-                [node.lineno] + [decorator.lineno for decorator in node.decorator_list]
-            )
-            end_line = node.end_lineno
-            break
-    else:
-        emit(f"♣ Could not find function {function_name} in {file_path}", level=logging.ERROR)
+    node = find_function_node(tree, qualname, function_name, line_hint)
+    if node is None:
+        emit(
+            f"♣ Could not locate {qualname or function_name} in {file_path}",
+            level=logging.ERROR,
+        )
         return None
+    start_line = node_start_line(node)
+    end_line = node.end_lineno
 
     source_lines = source.splitlines(keepends=True)
 
@@ -137,7 +134,13 @@ def build_replacement_source(
         and fixed_lines[0].strip().startswith('@healing_agent')
     ):
         fixed_lines.pop(0)
-    replacement = '\n'.join(fixed_lines) + '\n'
+
+    # A method lives at its class's indentation. The candidate was normalised to
+    # column zero above, so it is put back at the column the original occupied;
+    # blank lines are left blank rather than filled with trailing whitespace.
+    replacement = textwrap.indent(
+        '\n'.join(fixed_lines) + '\n', ' ' * node.col_offset
+    )
 
     new_source = ''.join(
         source_lines[: start_line - 1]

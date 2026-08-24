@@ -10,7 +10,7 @@ from .console import emit
 #: exists to be searched later, so it keeps what a prompt cannot afford.
 MAX_ARTIFACT_BYTES = 3 * 1024 * 1024
 
-def save_context(context: dict) -> Optional[str]:
+def save_context(context: dict, config: Optional[dict] = None) -> Optional[str]:
     """
     Save exception details to a JSON file.
     
@@ -37,11 +37,14 @@ def save_context(context: dict) -> Optional[str]:
         # it is capped by total size rather than by per-value truncation, and
         # only trimmed if that cap is actually reached.
         try:
-            payload = json.dumps(context, indent=2, ensure_ascii=False, default=str)
-            if len(payload.encode('utf-8')) > MAX_ARTIFACT_BYTES:
-                from .exception_handler import trim_values
+            from .evidence import select
 
-                trimmed = trim_values(context, 1000)
+            saved = select(context, config, 'disk')
+            payload = json.dumps(saved, indent=2, ensure_ascii=False, default=str)
+            if len(payload.encode('utf-8')) > MAX_ARTIFACT_BYTES:
+                from .evidence import _trim_value
+
+                trimmed = _trim_value(saved, 1000)
                 trimmed['artifact_note'] = (
                     f'values trimmed: the full context exceeded '
                     f'{MAX_ARTIFACT_BYTES} bytes'

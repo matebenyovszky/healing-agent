@@ -5,9 +5,11 @@ import inspect
 import os
 import sys
 import ast
+import textwrap
 from typing import Optional, Any, Dict, Callable
 import requests
 
+from .code_replacer import find_function_node
 from .redactor import (
     DEFAULT_PLACEHOLDER,
     get_sensitive_matcher,
@@ -38,24 +40,27 @@ def get_function_source(func: Callable) -> tuple[list[str], int]:
     """
     Get function source code using AST and inspect.
     Returns tuple of (source_lines, start_line).
+
+    The definition is located by ``__qualname__``, so a method is not confused
+    with a module-level function of the same name, and ``async def`` is found
+    like ``def`` — matching on the bare name missed both.
     """
-    # First try to get source directly from file
-    if hasattr(func, '__code__') and hasattr(func.__code__, 'co_filename'):
-        file_path = func.__code__.co_filename
-        with open(file_path, 'r', encoding='utf-8') as f:
-            source = f.read()
-            
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef) and node.name == func.__name__:
-                start_line = node.lineno
-                end_line = node.end_lineno
-                
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    all_lines = f.readlines()
-                    source_lines = all_lines[start_line-1:end_line]
-                    return source_lines, start_line
-                    
+    file_path = getattr(getattr(func, '__code__', None), 'co_filename', None)
+    if file_path and os.path.exists(file_path):
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                source = f.read()
+            node = find_function_node(
+                ast.parse(source),
+                getattr(func, '__qualname__', None),
+                getattr(func, '__name__', None),
+            )
+            if node is not None:
+                all_lines = source.splitlines(keepends=True)
+                return all_lines[node.lineno - 1:node.end_lineno], node.lineno
+        except (OSError, SyntaxError, ValueError):
+            pass  # fall through to inspect, which has its own strategies
+
     # Fallback to inspect
     return inspect.getsourcelines(func)
 
@@ -71,22 +76,6 @@ def _value_limit(config: Optional[dict] = None) -> int:
     except (TypeError, ValueError):
         return DEFAULT_VALUE_CHARS
     return limit if limit > 0 else DEFAULT_VALUE_CHARS
-
-
-#: Per-value limit when evidence LEAVES the machine — a prompt or an issue.
-#: Smaller than the capture limit on purpose: the artifact on disk is meant to
-#: be searchable later, a prompt is paid for by the token.
-DEFAULT_PROMPT_VALUE_CHARS = 300
-
-
-def prompt_value_limit(config: Optional[dict] = None) -> int:
-    try:
-        limit = int(
-            (config or {}).get("PROMPT_VALUE_CHARS", DEFAULT_PROMPT_VALUE_CHARS)
-        )
-    except (TypeError, ValueError):
-        return DEFAULT_PROMPT_VALUE_CHARS
-    return limit if limit > 0 else DEFAULT_PROMPT_VALUE_CHARS
 
 
 def trim_values(obj: Any, limit: int, _depth: int = 0) -> Any:
@@ -179,7 +168,9 @@ def capture_context(
 
     # Which environment the failure happened in is often the whole diagnosis.
     # Captured with both filters applied; see capture_environment.
-    if (config or {}).get('CAPTURE_ENVIRONMENT', True):
+    from .evidence import wanted_anywhere
+
+    if wanted_anywhere(config, 'environment'):
         try:
             context['environment'] = capture_environment(config)
         except Exception as environment_error:
@@ -212,7 +203,10 @@ def capture_context(
                 'module': func.__module__,
                 'filename': inspect.getfile(func),
                 'starting_line_number': start_line,
-                'source_code': source_code.strip(),
+                # A method's source is indented at its class's column, so
+                # `.strip()` alone left the first line at column zero and the
+                # body indented - code the model cannot even parse.
+                'source_code': textwrap.dedent(source_code).strip(),
                 'signature': str(sig),
                 'source_lines': {
                     i + start_line: line.rstrip()

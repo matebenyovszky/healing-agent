@@ -180,16 +180,30 @@ CAPTURE_DIR = None
 
 # Evidence Configuration
 # ----------------------
-# One redaction policy applies everywhere (names AND value shapes), so the same
-# evidence is safe on disk, in a prompt and in a GitHub issue. What differs is
-# only SIZE: the artifact on disk is meant to be searchable later, a prompt is
-# paid for by the token, and an issue body has a hard GitHub limit.
-CAPTURE_VALUE_CHARS = 3000   # per value, at capture time (what lands on disk)
-PROMPT_VALUE_CHARS = 300     # per value, when evidence leaves the machine
-# Capture the process environment (names always kept, values redacted by name
-# and scrubbed by shape - URL credentials, token formats, private keys). Which
-# environment a failure happened in is often the whole diagnosis.
-CAPTURE_ENVIRONMENT = True
+# The same failure context travels to three places with different economics.
+# Redaction is NOT what varies: one policy runs before anything leaves the
+# capture, so the evidence is equally safe everywhere. A sink only chooses how
+# much of it is worth carrying.
+#
+#   a number = include this section with this limit; 0 or missing = leave it out
+#   variables / environment / arguments : characters per VALUE. Every entry is
+#       kept and trimmed on its own, so one huge dataframe cannot push the rest
+#       of the state out of the report.
+#   logs : number of most recent LINES
+#
+# The error, the traceback and the function's own source are never optional:
+# a repair prompt without the source cannot produce a repair.
+EVIDENCE = {
+    # An artifact meant to be searched later - space is nearly free.
+    "disk":     {"arguments": 3000, "variables": 3000, "environment": 3000, "logs": 500},
+    # A prompt, paid for by the token, on every nested repair attempt.
+    "provider": {"arguments": 1000, "variables": 400,  "environment": 300,  "logs": 50},
+    # A GitHub body with a hard size limit, read by a human.
+    "issue":    {"arguments": 300,  "variables": 300,  "environment": 300,  "logs": 50},
+}
+# Per-value ceiling applied at CAPTURE time, before any sink sees the context.
+# It bounds what the process holds in memory; a sink trims further from there.
+CAPTURE_VALUE_CHARS = 3000
 
 # Secret Redaction Configuration
 # -----------------------------

@@ -110,6 +110,28 @@ def healing_agent(
     return decorator(func)
 
 
+def _resolve_repaired(module: Any, qualname: Optional[str], name: str) -> Callable[..., Any]:
+    """Find the repaired function in the reloaded module by its qualname path.
+
+    A method is not a module-level name: `Loader.load` has to be walked as
+    `module -> Loader -> load`. The lookup is deliberately static
+    (`inspect.getattr_static`), because the descriptor protocol would hand back
+    a BOUND method for a `classmethod` — and the decorator wrapped the plain
+    underlying function, so the captured arguments already carry `cls`. Binding
+    it again would pass `cls` twice.
+    """
+    target = module
+    for part in (qualname or name).split("."):
+        try:
+            attribute = inspect.getattr_static(target, part)
+        except AttributeError:
+            attribute = getattr(target, part)
+        if isinstance(attribute, (staticmethod, classmethod)):
+            attribute = attribute.__func__
+        target = attribute
+    return target
+
+
 async def _invoke(target: Callable[..., Any], args: tuple, kwargs: dict, awaiting: bool):
     """Call back into the user's code, awaiting the result when appropriate.
 
@@ -355,7 +377,7 @@ async def _attempt_healing(
             emit(f"♣ Reviewable Git patch saved to: {saved_patch}")
 
     if config.get("SAVE_EXCEPTIONS"):
-        saved_context = save_context(context)
+        saved_context = save_context(context, config)
         if config.get("DEBUG"):
             emit(f"♣ Exception details saved to: {saved_context}")
 
@@ -367,6 +389,19 @@ async def _attempt_healing(
             return True, await _invoke(func, args, kwargs, awaiting)
 
     if not config.get("AUTO_FIX", True) or not fixed_code:
+        return False, None
+
+    # A function defined inside another function cannot be verified: it exists
+    # only while its enclosing call runs, so the reloaded module has no name to
+    # look it up under. Refuse BEFORE the source file is touched — the
+    # candidate is already saved under _healing_agent_fixes/ for a human.
+    qualname = context["function_info"].get("qualname") or ""
+    if "<locals>" in qualname:
+        emit(
+            f"♣ {qualname} is defined inside another function, so a repair "
+            f"cannot be reloaded and re-run. The candidate was saved but not "
+            f"applied; move the function to module or class scope to heal it."
+        )
         return False, None
 
     if config.get("DEBUG"):
@@ -418,7 +453,9 @@ async def _attempt_healing(
     sys.modules[module_name] = new_module
     try:
         spec.loader.exec_module(new_module)
-        updated_func = getattr(new_module, func.__name__)
+        updated_func = _resolve_repaired(
+            new_module, getattr(func, "__qualname__", None), func.__name__
+        )
         result = await _invoke(updated_func, args, kwargs, awaiting)
     except Exception:
         # Do not leave a partially loaded or still-failing repaired module in

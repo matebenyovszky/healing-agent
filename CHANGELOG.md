@@ -11,6 +11,32 @@ moves to `0.5.0` because `LOG_MODE` is a new configuration key; a config file
 predating it keeps working and is completed from the template on load.
 
 ### Added
+- **Methods are healed, not just module-level functions.** A repair was located
+  by the function's bare NAME among the TOP-LEVEL definitions only, so a method
+  was never found: healing aborted and the original exception was re-raised,
+  for what is most of the code in an object-oriented codebase. Four separate
+  things had to change:
+  - definitions are located by `__qualname__`, walking classes and nested
+    scopes, so `Loader.load` is distinguished from a module-level `load` of the
+    same name. When a qualname is genuinely ambiguous - two branches of an `if`
+    each defining it - the captured `starting_line_number` settles it, and when
+    it cannot, the repair is refused rather than applied to the wrong function
+  - the candidate is re-indented to the column the original definition occupies,
+    after being normalised to column zero, so a model that answers with an
+    indented method and one that answers at column zero both land correctly
+  - the repaired function is resolved after the reload by walking the qualname
+    path instead of `getattr(module, name)`. The lookup is static, so a
+    `classmethod` yields the underlying function rather than a bound method -
+    binding it again would have passed `cls` twice
+  - captured source is dedented, so what reaches the model is parseable Python.
+    Previously only the first line was dedented and the body stayed indented
+
+  Nested functions (a `<locals>` qualname) are explicitly refused BEFORE the
+  source file is touched, with an explanation: such a function exists only while
+  its enclosing call runs, so a reloaded module has no name to verify it under.
+  The candidate is still saved for a human to use
+- The capture path also finds `async def` definitions, which it matched as
+  `ast.FunctionDef` only and therefore missed entirely
 - **The captured evidence is now one complete package: environment included,
   saved, sent to the model, and attached to an escalated issue.** Previously
   the process environment was not captured at all, the captured variables were
@@ -30,11 +56,20 @@ predating it keeps working and is completed from the template on load.
   - `GITHUB["issue_detail"]` defaults to `redacted`, so an escalated issue
     carries the evidence an agent or a human needs instead of paths on a
     machine they cannot reach
-  - Sizes: `CAPTURE_VALUE_CHARS` (3000) is what lands on disk, so the artifact
-    stays searchable later; `PROMPT_VALUE_CHARS` (300) is what leaves the
-    machine, because a prompt is paid for by the token and an issue body has a
-    hard GitHub limit. The saved artifact is capped at 3 MB in total and is
-    trimmed, never dropped, if it would exceed that
+  - `EVIDENCE` decides per destination which sections travel and how much of
+    each: `{"disk": {...}, "provider": {...}, "issue": {...}}`. A number
+    includes a section with that limit, `0` or a missing key leaves it out —
+    absent rather than empty, so "not collected" is distinguishable from
+    "collected and empty". Units follow what is useful: characters **per
+    value** for variables, environment and arguments, so every entry survives
+    and one huge dataframe cannot push the rest of the state out of the
+    report; **lines** for logs. Error, traceback and the function's own source
+    are never negotiable. A section no sink carries is not captured at all.
+    Measured on a real context, changing only the provider policy: ~2600
+    tokens with the defaults, ~1600 with `environment: 0`, ~1270 with
+    variables and logs tightened as well. `CAPTURE_VALUE_CHARS` (3000) still
+    bounds what a capture holds in memory, and the saved artifact is capped at
+    3 MB in total — trimmed, never dropped, if it would exceed that
 
   **Behavior change:** repairs cost more tokens, and an escalated issue now
   contains captured values. Both were previously impossible to enable. Set
@@ -92,6 +127,14 @@ predating it keeps working and is completed from the template on load.
 - The GitHub escalation shipped in 0.4.0 is finally documented in the README —
   it worked and was live-verified, but nothing outside the config template
   mentioned it, so it was undiscoverable
+
+### Removed
+- `code_replacer.decorator_checker()`. It had no callers anywhere, and its
+  correction pass did not work: `should_add` was set to `True` and never
+  cleared, so the `break` did not prevent the original line from being appended
+  and a "corrected" file could come out wrong. Deciding where the decorator
+  belongs is a job for the propose/verify pipeline, not a line-oriented pass
+  over an AST
 
 ### Fixed
 - The four `agent_tools` modules printed directly instead of going through

@@ -258,16 +258,38 @@ def validate_config(config):
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
 
-        for size_setting in ['CAPTURE_VALUE_CHARS', 'PROMPT_VALUE_CHARS']:
-            value = config.get(size_setting)
-            if value is not None and (
-                isinstance(value, bool) or not isinstance(value, int) or value <= 0
-            ):
-                raise ValueError(f"{size_setting} must be a positive integer")
-        if 'CAPTURE_ENVIRONMENT' in config and not isinstance(
-            config['CAPTURE_ENVIRONMENT'], bool
+        capture_chars = config.get('CAPTURE_VALUE_CHARS')
+        if capture_chars is not None and (
+            isinstance(capture_chars, bool)
+            or not isinstance(capture_chars, int)
+            or capture_chars <= 0
         ):
-            raise ValueError("CAPTURE_ENVIRONMENT must be a boolean value")
+            raise ValueError("CAPTURE_VALUE_CHARS must be a positive integer")
+
+        evidence = config.get('EVIDENCE')
+        if evidence is not None:
+            from .evidence import DEFAULT_EVIDENCE, SECTIONS
+
+            if not isinstance(evidence, dict):
+                raise ValueError("EVIDENCE must be a mapping of sink -> section limits")
+            for sink, limits in evidence.items():
+                if sink not in DEFAULT_EVIDENCE:
+                    raise ValueError(
+                        f"EVIDENCE has an unknown sink {sink!r}; "
+                        f"expected one of: {', '.join(sorted(DEFAULT_EVIDENCE))}"
+                    )
+                if not isinstance(limits, dict):
+                    raise ValueError(f"EVIDENCE[{sink!r}] must be a mapping")
+                for section, limit in limits.items():
+                    if section not in SECTIONS:
+                        raise ValueError(
+                            f"EVIDENCE[{sink!r}] has an unknown section {section!r}; "
+                            f"expected one of: {', '.join(sorted(SECTIONS))}"
+                        )
+                    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
+                        raise ValueError(
+                            f"EVIDENCE[{sink!r}][{section!r}] must be a non-negative integer"
+                        )
         if config.get('GIT_MODE', 'off') not in {'off', 'patch', 'apply'}:
             raise ValueError("GIT_MODE must be one of: off, patch, apply")
         if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):

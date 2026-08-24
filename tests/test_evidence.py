@@ -16,6 +16,7 @@ redactor = importlib.import_module("healing_agent.redactor")
 handler = importlib.import_module("healing_agent.exception_handler")
 fixer = importlib.import_module("healing_agent.ai_code_fixer")
 saver = importlib.import_module("healing_agent.exception_saver")
+evidence = importlib.import_module("healing_agent.evidence")
 github_issue = importlib.import_module("healing_agent.github_issue")
 
 
@@ -70,8 +71,12 @@ def test_environment_keeps_names_but_masks_secrets(monkeypatch):
     assert environment["EV_REGION"] == "eu-central-1"
 
 
-def test_environment_capture_can_be_switched_off():
-    context = handler.capture_context(config={"CAPTURE_ENVIRONMENT": False})
+def test_environment_is_not_captured_when_no_sink_carries_it():
+    """Reading the environment for nobody is waste, so capture follows policy."""
+    nobody_wants_it = {
+        "EVIDENCE": {sink: {"environment": 0} for sink in evidence.DEFAULT_EVIDENCE}
+    }
+    context = handler.capture_context(config=nobody_wants_it)
     assert "environment" not in context
 
 
@@ -82,12 +87,16 @@ def test_environment_is_present_by_default():
 
 # --- size policy: rich on disk, affordable on the way out --------------------
 
-def test_capture_keeps_more_than_a_prompt_sends():
-    assert handler.DEFAULT_VALUE_CHARS > handler.DEFAULT_PROMPT_VALUE_CHARS
+def test_disk_carries_more_than_the_prompt_does():
+    """Space on disk is nearly free; a prompt is paid for on every attempt."""
+    disk = evidence.policy({}, "disk")
+    provider = evidence.policy({}, "provider")
+    assert disk["variables"] > provider["variables"]
+    assert disk["logs"] > provider["logs"]
 
 
-def test_trim_values_shortens_strings_at_every_depth():
-    trimmed = handler.trim_values(
+def test_trim_shortens_strings_at_every_depth():
+    trimmed = evidence._trim_value(
         {"a": "x" * 100, "b": {"c": ["y" * 100]}, "n": 5}, 10
     )
     assert trimmed["a"].startswith("x" * 10) and len(trimmed["a"]) < 20
@@ -150,3 +159,68 @@ def test_issue_attaches_the_context_by_default():
     assert "```json" in issue["body"], "default no longer attaches the evidence"
     assert "APP_ENV" in issue["body"]
     assert github_issue.FINGERPRINT_MARKER in issue["body"]
+
+
+# --- per-sink policy ---------------------------------------------------------
+
+def test_a_section_set_to_zero_is_absent_not_empty():
+    """A reader must be able to tell 'not collected' from 'collected, empty'."""
+    context = {"error": {}, "variables": {"locals": {"a": "1"}}, "environment": {"X": "1"}}
+    selected = evidence.select(
+        context, {"EVIDENCE": {"provider": {"environment": 0}}}, "provider"
+    )
+    assert "environment" not in selected
+    assert "variables" in selected
+
+
+def test_logs_are_limited_by_LINES_not_characters():
+    context = {"error": {}, "recent_logs": [f"line {i}" for i in range(100)]}
+    selected = evidence.select(context, {"EVIDENCE": {"issue": {"logs": 5}}}, "issue")
+    assert len(selected["recent_logs"]) == 5
+    assert selected["recent_logs"][-1] == "line 99", "kept the oldest instead of the newest"
+
+
+def test_every_variable_survives_and_is_trimmed_individually():
+    """One huge value must not push the rest of the state out of the report."""
+    context = {
+        "error": {},
+        "variables": {"locals": {
+            "huge": {"value_preview": "H" * 10000},
+            "small": {"value_preview": "ok"},
+            "also_small": {"value_preview": "fine"},
+        }},
+    }
+    selected = evidence.select(
+        context, {"EVIDENCE": {"provider": {"variables": 50}}}, "provider"
+    )
+    locals_ = selected["variables"]["locals"]
+    assert set(locals_) == {"huge", "small", "also_small"}, "a variable was dropped"
+    assert len(locals_["huge"]["value_preview"]) < 100
+    assert locals_["small"]["value_preview"] == "ok", "a short value was altered"
+
+
+def test_essential_sections_are_never_negotiable():
+    """Without the error and the source there is nothing to diagnose."""
+    context = {
+        "error": {"type": "KeyError"},
+        "function_info": {"source_code": "def f(): ..."},
+        "ai_hint": "hint",
+        "variables": {"locals": {}},
+    }
+    selected = evidence.select(
+        context,
+        {"EVIDENCE": {"provider": {s: 0 for s in evidence.SECTIONS}}},
+        "provider",
+    )
+    assert selected["error"] and selected["function_info"] and selected["ai_hint"]
+
+
+def test_an_unknown_sink_keeps_its_defaults_rather_than_emptying():
+    assert evidence.policy({"EVIDENCE": {"typo": {"variables": 1}}}, "disk") == (
+        evidence.DEFAULT_EVIDENCE["disk"]
+    )
+
+
+def test_a_malformed_limit_is_ignored_not_fatal():
+    limits = evidence.policy({"EVIDENCE": {"issue": {"variables": "lots"}}}, "issue")
+    assert limits["variables"] == evidence.DEFAULT_EVIDENCE["issue"]["variables"]

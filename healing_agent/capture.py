@@ -105,7 +105,9 @@ def capture(label: Optional[str] = None, **local_config) -> Optional[str]:
         directory = config.get("CAPTURE_DIR") or os.path.dirname(
             os.path.abspath(caller.f_code.co_filename)
         )
-        path = save_capture(context, str(directory), label)
+        from .evidence import select
+
+        path = save_capture(select(context, config, 'disk'), str(directory), label)
         if path and config.get("DEBUG"):
             emit(f"♣ Capture saved to: {path}")
         return path

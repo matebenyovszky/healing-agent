@@ -3,7 +3,7 @@ import ast
 import re
 from typing import Dict, Any
 from .ai_broker import get_ai_response
-from .exception_handler import prompt_value_limit, trim_values
+from .evidence import select
 from .console import emit
 
 def ensure_healing_agent_decorator(code: str) -> str:
@@ -80,15 +80,14 @@ Module: {function_info.get('module')}
     if context.get('ai_hint'):
         ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
 
-    # Runtime state and environment. Both are redacted and trimmed on the way
-    # out; the artifact on disk keeps the fuller version for later inspection.
-    limit = prompt_value_limit(config)
+    # What this sink carries, and how much of it, is policy: see evidence.py.
+    context = select(context, config, 'provider')
 
     state_info = ""
     variables = (context.get('variables') or {}).get('locals') or {}
     if variables:
         rendered = []
-        for name, data in trim_values(variables, limit).items():
+        for name, data in variables.items():
             if isinstance(data, dict):
                 rendered.append(
                     f"- {name} ({data.get('type')}) = {data.get('value_preview')}"
@@ -101,8 +100,7 @@ Module: {function_info.get('module')}
     environment = context.get('environment') or {}
     if environment:
         rendered = [
-            f"- {name}={value}"
-            for name, value in sorted(trim_values(environment, limit).items())
+            f"- {name}={value}" for name, value in sorted(environment.items())
         ]
         environment_info = (
             "\nEnvironment (secrets masked; names kept because their presence "
