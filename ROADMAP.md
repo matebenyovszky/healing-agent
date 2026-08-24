@@ -48,6 +48,32 @@ Next steps (each one scenario + at most a prompt/context change):
   pagination drift; drift-aware prompts; decorator-preserving replacement;
   bounded generation retry.
 
+## Evidence and where it goes
+
+- [ ] **Destination-scoped evidence policy.** Evidence is captured once and
+      redacted once, then flows to destinations with very different trust
+      levels: the local artifact files (the machine that already held the data
+      in memory), the AI provider (a third party, over the network), and a
+      GitHub issue (potentially public and permanent). Today a single
+      `REDACT_SECRETS` switch governs all three, so an operator cannot say
+      "keep the full values on disk, redact only what leaves the machine" —
+      which is the natural policy, and the one people assume is already in
+      place.
+      Express it as a level per destination, reusing the vocabulary the issue
+      escalation already has, rather than as per-destination field lists:
+
+          EVIDENCE = {"disk": "full", "provider": "redacted", "issue": "reference"}
+
+      A field-list matrix (`issue=[...]`, `provider=[...]`) was considered and
+      rejected: it would require the operator to know every context key and to
+      revisit the configuration whenever one is added.
+      **Design constraint, not optional:** today exactly one place can leak a
+      secret and it is closed. Per-destination redaction turns that into one
+      place per egress, each of which must be right. So the chokepoint stays
+      the default, "less redacted" is only ever an explicit opt-in for the
+      local disk, and every egress path needs its own test asserting it
+      redacts. Worth building only with those tests written first.
+
 ## How healing is triggered
 
 - [x] **An escaping exception** from a decorated function — the original path.
