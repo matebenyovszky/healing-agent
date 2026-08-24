@@ -63,6 +63,57 @@ decoy column is present. Our adversarial test caught the model summing order
 numbers as amounts; two targeted prompt sentences fixed it, and the test keeps
 it fixed.
 
+### With a schema contract (Pydantic, jsonschema, anything that raises)
+
+If your application already declares what the data should look like, hand that
+declaration to the repair. A validation failure becomes a repair request, and
+the model gets the contract itself as evidence — not just the symptom:
+
+```python
+class SalesRow(BaseModel):        # your contract, written for your own sake
+    customer: str
+    amount: int
+
+@healing_agent
+def load_sales(rows):
+    try:
+        parsed = [SalesRow(**row) for row in rows]
+    except ValidationError as error:
+        healing_agent.request_healing(
+            "rows do not satisfy the SalesRow contract",
+            details={
+                "contract": SalesRow.model_json_schema(),
+                "validation_errors": error.errors(),
+                "row_sample": rows[0],
+            },
+        )
+    return {"total": sum(r.amount for r in parsed)}
+```
+
+Feed it `[{"ugyfel": "Alfa Kft", "osszeg": "1200"}, ...]` — Hungarian headers,
+amounts as strings, contract violated — and the generated repair maps the
+headers instead of weakening the model:
+
+```python
+alias_mapping = {'ugyfel': 'customer', 'ügyfél': 'customer',
+                 'osszeg': 'amount',   'összeg': 'amount'}
+
+def normalize_key(k):                    # lowercase, trim, strip diacritics
+    ...
+
+if expected_key in mapped:               # ambiguous mapping: refuse, don't guess
+    raise ValueError(f"Duplicate mapped key '{expected_key}' in row: {row}")
+```
+
+Note what it did and did not do: it added both the accented and unaccented
+alias, it refuses an ambiguous mapping rather than inventing a value, and it
+never touched `SalesRow`. The loader adapts; the contract stays authoritative.
+Both the drifted and the original format return the same result afterwards.
+
+This needs no support from Healing Agent beyond what is shown — any validator
+that raises works, because the contract and the errors travel as ordinary
+`details`.
+
 The implementation is intentionally tiny: drift awareness lives in the fix and
 hint prompts, correctness lives in the acceptance tests. See
 [docs/data-healing.md](docs/data-healing.md) for the approach and how to extend it.
