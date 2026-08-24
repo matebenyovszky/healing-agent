@@ -1,9 +1,11 @@
 # Experimental and not used.
 
+import logging
 import os
 import ast
 import json
 from typing import Dict, List, Union
+from ..console import emit
 
 def get_function_details(file_path: str) -> List[Dict[str, str]]:
     """
@@ -28,7 +30,7 @@ def get_function_details(file_path: str) -> List[Dict[str, str]]:
                     "docstring": docstring if docstring else "No description available"
                 })
     except Exception as e:
-        print(f"Error parsing {file_path}: {str(e)}")
+        emit(f"Error parsing {file_path}: {str(e)}", level=logging.ERROR)
         return []
         
     return functions

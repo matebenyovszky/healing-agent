@@ -13,7 +13,7 @@ import os
 # renamed or removed, and is then set to the release that ships that change.
 # healing_agent compares it with its own CONFIG_SCHEMA_VERSION on load and
 # fills in any behavior key this file predates, so an older config keeps working.
-HEALING_AGENT_CONFIG_VERSION = "0.4.1"
+HEALING_AGENT_CONFIG_VERSION = "0.5.0"
 AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")
 
 # Sampling parameters
@@ -143,12 +143,14 @@ GITHUB = {
     "repo": None,                  # "owner/name"; None = detect from the git remote
     "token_env": "GITHUB_TOKEN",   # NAME of the env var holding the token, never the value
     "issue_on_failure": False,     # open an issue when healing definitively fails
-    # How much leaves the machine:
+    # How much leaves the machine. One redaction policy applies to all three -
+    # they differ in how much of the evidence is attached, not in how safe it is:
     #   reference     - error/function identity + pointers to local artifacts
     #                   (no captured values; note the exception MESSAGE is included)
-    #   redacted      - also attach the redacted context JSON
+    #   redacted      - also attach the redacted context JSON (default: an issue
+    #                   an agent or a human can act on without the machine)
     #   ai-anonymized - also attach a context JSON with values replaced by an AI pass
-    "issue_detail": "reference",
+    "issue_detail": "redacted",
     "issue_label": "healing-agent",  # label used for the issue and for deduplication
 }
 
@@ -164,8 +166,30 @@ GITHUB = {
 # inside them - logger.info(f"token={t}") would reach the provider.
 LOG_BUFFER_SIZE = 0
 LOG_BUFFER_LEVEL = "INFO"  # minimum level to record
+# Where Healing Agent's OWN messages go. Records are sent to the standard
+# logger "healing_agent", which is never configured by the library, so your
+# application's level, handlers, formatters and filters apply to them through
+# the normal logger hierarchy.
+#   auto    - use the logger when your application configured logging for it,
+#             print to the console when it did not (previous behavior)
+#   logging - always use the logger, even with no handler attached
+#   print   - always print, whatever your application configured
+LOG_MODE = "auto"
 # Where healing_agent.capture() writes snapshots; None = next to the caller.
 CAPTURE_DIR = None
+
+# Evidence Configuration
+# ----------------------
+# One redaction policy applies everywhere (names AND value shapes), so the same
+# evidence is safe on disk, in a prompt and in a GitHub issue. What differs is
+# only SIZE: the artifact on disk is meant to be searchable later, a prompt is
+# paid for by the token, and an issue body has a hard GitHub limit.
+CAPTURE_VALUE_CHARS = 3000   # per value, at capture time (what lands on disk)
+PROMPT_VALUE_CHARS = 300     # per value, when evidence leaves the machine
+# Capture the process environment (names always kept, values redacted by name
+# and scrubbed by shape - URL credentials, token formats, private keys). Which
+# environment a failure happened in is often the whole diagnosis.
+CAPTURE_ENVIRONMENT = True
 
 # Secret Redaction Configuration
 # -----------------------------

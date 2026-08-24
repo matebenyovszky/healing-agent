@@ -1,7 +1,9 @@
+import logging
 import subprocess
 import sys
 import re
 from typing import Optional, Tuple
+from ..console import emit
 
 def extract_module_info(error_message: str) -> Optional[Tuple[str, str]]:
     """
@@ -41,13 +43,13 @@ def install_missing_module(error_message: str, debug: bool = False) -> bool:
     module_info = extract_module_info(error_message)
     if not module_info:
         if debug:
-            print("♣ Could not extract module name from error message")
+            emit("♣ Could not extract module name from error message", level=logging.ERROR)
         return False
     
     module_name, install_name = module_info
     
     if debug:
-        print(f"♣ Attempting to install missing module: {install_name}")
+        emit(f"♣ Attempting to install missing module: {install_name}")
     
     try:
         subprocess.check_call(
@@ -56,9 +58,9 @@ def install_missing_module(error_message: str, debug: bool = False) -> bool:
             stderr=subprocess.PIPE if not debug else None
         )
         if debug:
-            print(f"♣ Successfully installed {install_name}")
+            emit(f"♣ Successfully installed {install_name}")
         return True
     except subprocess.CalledProcessError as e:
         if debug:
-            print(f"♣ Failed to install {install_name}: {str(e)}")
+            emit(f"♣ Failed to install {install_name}: {str(e)}", level=logging.ERROR)
         return False 

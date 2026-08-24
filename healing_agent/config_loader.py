@@ -1,8 +1,9 @@
+import logging
 from pathlib import Path
 import os
 import shutil
 import types
-from .console import emit
+from .console import MODES, emit, set_output_mode
 from ._version import CONFIG_SCHEMA_VERSION, parse_version
 
 TEMPLATE_PATH = Path(__file__).with_name('config_template.py')
@@ -79,7 +80,7 @@ def reconcile_config_schema(config_vars, config_path=None):
     try:
         defaults = load_template_defaults()
     except Exception as template_error:
-        emit(f"♣ Could not read the config template for defaults: {template_error}")
+        emit(f"♣ Could not read the config template for defaults: {template_error}", level=logging.ERROR)
         return config_vars
 
     if parse_version(found) > parse_version(CONFIG_SCHEMA_VERSION):
@@ -195,6 +196,10 @@ def load_config(local_config_path=None):
         anthropic_config.setdefault('temperature', os.getenv('ANTHROPIC_TEMPERATURE'))
         anthropic_config.setdefault('max_tokens', os.getenv('ANTHROPIC_MAX_TOKENS'))
 
+    # Apply the output mode before anything else reports: from here on the
+    # application's logging configuration decides where our messages go.
+    set_output_mode(config_vars.get('LOG_MODE', 'auto'))
+
     # Validate config
     validate_config(config_vars)
             
@@ -253,10 +258,22 @@ def validate_config(config):
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
 
+        for size_setting in ['CAPTURE_VALUE_CHARS', 'PROMPT_VALUE_CHARS']:
+            value = config.get(size_setting)
+            if value is not None and (
+                isinstance(value, bool) or not isinstance(value, int) or value <= 0
+            ):
+                raise ValueError(f"{size_setting} must be a positive integer")
+        if 'CAPTURE_ENVIRONMENT' in config and not isinstance(
+            config['CAPTURE_ENVIRONMENT'], bool
+        ):
+            raise ValueError("CAPTURE_ENVIRONMENT must be a boolean value")
         if config.get('GIT_MODE', 'off') not in {'off', 'patch', 'apply'}:
             raise ValueError("GIT_MODE must be one of: off, patch, apply")
         if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):
             raise ValueError("GIT_PATCH_DIR must be a path string or None")
+        if config.get('LOG_MODE', 'auto') not in MODES:
+            raise ValueError(f"LOG_MODE must be one of: {', '.join(MODES)}")
         if config.get('VERIFY_COMMAND') is not None and not isinstance(config.get('VERIFY_COMMAND'), (str, list, tuple)):
             raise ValueError("VERIFY_COMMAND must be a command string, argument list, or None")
         if (
@@ -269,5 +286,5 @@ def validate_config(config):
         return config
         
     except Exception as e:
-        emit(f"♣ Error loading config: {str(e)}")
+        emit(f"♣ Error loading config: {str(e)}", level=logging.ERROR)
         raise

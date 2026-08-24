@@ -1,3 +1,4 @@
+import logging
 import os
 import datetime
 from typing import Optional
@@ -44,9 +45,9 @@ def save_ai_fix(context: dict) -> Optional[str]:
             return file_path
 
         except Exception as write_error:
-            emit(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}")
+            emit(f"♣ Failed to write AI fix to {file_path}: {str(write_error)}", level=logging.ERROR)
             return None
 
     except Exception as save_error:
-        emit(f"♣ Failed to save AI fix: {str(save_error)}")
+        emit(f"♣ Failed to save AI fix: {str(save_error)}", level=logging.ERROR)
         return None 

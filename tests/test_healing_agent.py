@@ -23,11 +23,12 @@ def test_failed_healing_reraises_original_exception(monkeypatch):
     monkeypatch.setattr(
         healing_module, "load_config", lambda: (_config(auto_fix=False), None)
     )
-    monkeypatch.setattr(
-        healing_module,
-        "_attempt_healing",
-        lambda *_args, **_kwargs: (False, None),
-    )
+    async def no_repair(*_args, **_kwargs):
+        return False, None
+
+    # _attempt_healing is a coroutine function: the healing session is written
+    # once and shared by the sync and async wrappers, so stubs must be too.
+    monkeypatch.setattr(healing_module, "_attempt_healing", no_repair)
 
     @healing_module.healing_agent
     def broken():
@@ -46,7 +47,7 @@ def test_max_attempts_bounds_recursive_repair(monkeypatch):
         healing_module, "load_config", lambda: (_config(max_attempts=3), None)
     )
 
-    def fake_attempt(*_args, **kwargs):
+    async def fake_attempt(*_args, **kwargs):
         attempts.append(kwargs.get("attempt_number", _args[5]))
         return True, holder["wrapped"]()
 
@@ -69,7 +70,7 @@ def test_attempt_budget_resets_for_new_top_level_call(monkeypatch):
     monkeypatch.setattr(
         healing_module, "load_config", lambda: (_config(max_attempts=1), None)
     )
-    def record_failed_attempt(*_args, **_kwargs):
+    async def record_failed_attempt(*_args, **_kwargs):
         attempts.append("attempt")
         return False, None
 

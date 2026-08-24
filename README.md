@@ -16,6 +16,8 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 - 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
 - 🙋 **Ask for a repair, don't wait for a crash**: call `request_healing(reason)` from a handled error branch
 - 🎫 **GitHub escalation**: a failure it could not repair opens an issue in your own repository, deduplicated, so the attempt is never lost
+- ⚡ **`async def` works the same way**: coroutine functions are healed by the same session, not a parallel one
+- 📝 **Inherits your logging**: output goes to the standard `healing_agent` logger, so your level, handlers and formatters apply — and prints as before if you configured none
 - 🔒 Secret redaction before anything is sent to a provider or written to disk
 - 💾 Backups before every fix, exception context saved to JSON, optional reviewable `git apply` patches
 - 🔧 Zero-config integration: import, decorate, run
@@ -206,6 +208,39 @@ There is no second pipeline behind this: `request_healing` raises `HealingReques
 
 If healing succeeds, the repaired function's result is returned to your caller. If it does not, `HealingRequested` propagates: a program that asked a question deserves to hear that it went unanswered, rather than receiving a silent `None`.
 
+### Healing async functions
+
+`async def` functions are decorated exactly like synchronous ones:
+
+```python
+@healing_agent
+async def fetch_sales(session, url):
+    payload = await (await session.get(url)).json()
+    return sum(int(row["amount"]) for row in payload["rows"])
+```
+
+The decorator detects a coroutine function and returns an async wrapper for it. The healing session — attempt budget, backup, verify gates, apply, rollback, escalation — is the same code in both cases; only the calls back into your own function are awaited.
+
+### Where Healing Agent's own output goes
+
+Healing Agent logs to the standard logger `healing_agent`, which it never configures. Your application's level, handlers, formatters and filters therefore apply to its messages through the normal logger hierarchy — including loguru via its documented `InterceptHandler`, or structlog, since both wrap stdlib `logging`. No logging dependency is added.
+
+```python
+import logging
+logging.basicConfig(level=logging.INFO)   # healing output now follows your setup
+logging.getLogger("healing_agent").setLevel(logging.WARNING)  # ...or quieten just this
+```
+
+If your application configured no logging at all, the rich console narration is printed as before. `LOG_MODE` in the config file makes the choice explicit:
+
+| `LOG_MODE` | Behavior |
+|---|---|
+| `auto` (default) | logger when your application configured logging, console when it did not |
+| `logging` | always the logger |
+| `print` | always the console, whatever your application configured |
+
+> **Upgrading:** if your application *does* configure logging, its configuration now governs Healing Agent's output too — an app set to `WARNING` will no longer show the `INFO` narration. Set `LOG_MODE = "print"` to keep the console behavior of earlier releases.
+
 ### Observing without a failure
 
 The same evidence that powers a repair is useful on its own — knowing every variable at the moment an API call returned something unexpected is often the whole debugging session:
@@ -279,6 +314,11 @@ BACKUP_ENABLED = True     # Back up sources before fixes
 RESTORE_ON_FAILURE = True # Roll the source back when healing definitively fails
 SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
+
+# Evidence: one redaction policy everywhere, only the size differs
+CAPTURE_ENVIRONMENT = True   # Environment names always kept, values masked by name AND shape
+CAPTURE_VALUE_CHARS = 3000   # Per value on disk — the artifact stays searchable later
+PROMPT_VALUE_CHARS = 300     # Per value when evidence leaves the machine
 GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded git apply)
 
 # Verification gates: run before the live file changes, exit code 0 accepts
@@ -289,6 +329,7 @@ VERIFY_TIMEOUT_SECONDS = 120
 # Observation (see "Observing without a failure" above)
 LOG_BUFFER_SIZE = 0       # 0 or absent = ring buffer never installed; N = keep and send N records
 LOG_BUFFER_LEVEL = "INFO" # Minimum level the buffer records
+LOG_MODE = "auto"         # auto | logging | print - where Healing Agent's OWN messages go
 CAPTURE_DIR = None        # Where capture() writes; None = next to the calling module
 ```
 

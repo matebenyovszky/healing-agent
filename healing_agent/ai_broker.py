@@ -1,3 +1,4 @@
+import logging
 from typing import Any, Dict, Optional
 import time
 import httpx
@@ -321,5 +322,5 @@ def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") 
             raise ValueError(f"Unsupported AI provider: {provider}")
             
     except Exception as e:
-        emit(f"♣ Error getting AI response: {str(e)}")
+        emit(f"♣ Error getting AI response: {str(e)}", level=logging.ERROR)
         raise

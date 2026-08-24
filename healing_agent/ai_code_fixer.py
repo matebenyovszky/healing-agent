@@ -1,7 +1,9 @@
+import logging
 import ast
 import re
 from typing import Dict, Any
 from .ai_broker import get_ai_response
+from .exception_handler import prompt_value_limit, trim_values
 from .console import emit
 
 def ensure_healing_agent_decorator(code: str) -> str:
@@ -27,7 +29,7 @@ def ensure_healing_agent_decorator(code: str) -> str:
     return decorator + code
 
 
-def prepare_fix_prompt(context: Dict[str, Any]) -> str:
+def prepare_fix_prompt(context: Dict[str, Any], config: Dict[str, Any] = None) -> str:
     """
     Prepare the prompt for AI based on the context.
     
@@ -78,6 +80,35 @@ Module: {function_info.get('module')}
     if context.get('ai_hint'):
         ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
 
+    # Runtime state and environment. Both are redacted and trimmed on the way
+    # out; the artifact on disk keeps the fuller version for later inspection.
+    limit = prompt_value_limit(config)
+
+    state_info = ""
+    variables = (context.get('variables') or {}).get('locals') or {}
+    if variables:
+        rendered = []
+        for name, data in trim_values(variables, limit).items():
+            if isinstance(data, dict):
+                rendered.append(
+                    f"- {name} ({data.get('type')}) = {data.get('value_preview')}"
+                )
+            else:
+                rendered.append(f"- {name} = {data}")
+        state_info = "\nLocal variables at the moment of failure:\n" + "\n".join(rendered) + "\n"
+
+    environment_info = ""
+    environment = context.get('environment') or {}
+    if environment:
+        rendered = [
+            f"- {name}={value}"
+            for name, value in sorted(trim_values(environment, limit).items())
+        ]
+        environment_info = (
+            "\nEnvironment (secrets masked; names kept because their presence "
+            "is itself diagnostic):\n" + "\n".join(rendered) + "\n"
+        )
+
     # A deliberate request carries intent, which an exception does not: the
     # program says what it expected, not merely where it stopped.
     healing_request = ""
@@ -115,7 +146,7 @@ Error Line: {context['error'].get('error_line')}
 
 {error_details}
 {traceback_info}
-{func_info}{arg_info}{healing_request}{recent_logs}{ai_hint}
+{func_info}{arg_info}{state_info}{environment_info}{healing_request}{recent_logs}{ai_hint}
 
 Return only the fixed code without any explanations or markdown formatting.
 Return exactly ONE top-level function definition. Place any imports and helper functions INSIDE the function body, never at module level.
@@ -176,7 +207,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     """
     try:
         # Prepare the prompt for AI
-        prompt = prepare_fix_prompt(context)
+        prompt = prepare_fix_prompt(context, config)
 
         # Generation is non-deterministic: validate, and retry once on an
         # invalid candidate instead of giving up the whole repair attempt.
@@ -220,7 +251,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         return
 
     except Exception as e:
-        emit(f"♣ Error during code fixing: {str(e)}")
+        emit(f"♣ Error during code fixing: {str(e)}", level=logging.ERROR)
         emit(f"♣ Error type: {type(e).__name__}")
         emit(f"♣ Error details: {repr(e)}")
         emit("♣ Error traceback:")

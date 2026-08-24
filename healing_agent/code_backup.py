@@ -1,3 +1,4 @@
+import logging
 import os
 import shutil
 from datetime import datetime
@@ -63,7 +64,7 @@ def create_backup(context: dict) -> Optional[str]:
         return backup_path
         
     except Exception as e:
-        emit(f"⚠ Warning: Failed to create backup: {str(e)}")
+        emit(f"⚠ Warning: Failed to create backup: {str(e)}", level=logging.WARNING)
         return None
 
 
@@ -101,5 +102,5 @@ def restore_backup(backup_path: str, target_path: str) -> bool:
         return True
 
     except Exception as e:
-        emit(f"⚠ Warning: Failed to restore {target_path} from backup: {str(e)}")
+        emit(f"⚠ Warning: Failed to restore {target_path} from backup: {str(e)}", level=logging.WARNING)
         return False

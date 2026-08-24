@@ -1,110 +1,83 @@
 import ast
-from typing import Dict, List, Optional, Tuple
+import logging
+import textwrap
+from typing import Dict, Iterator, Optional, Tuple
 from .console import emit
 
-def decorator_checker(file_path: str) -> bool:
-    """
-    Checks and corrects healing_agent decorator usage in Python files.
-    
-    Args:
-        file_path (str): Path to the Python file to check
-        
-    Returns:
-        bool: True if changes were made, False otherwise
-    """
-    try:
-        # Read the file content
-        with open(file_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            
-        # Parse the content into an AST
-        tree = ast.parse(content)
-        
-        changes_needed = False
-        function_data: List[Tuple[int, int, bool, str]] = [] # (start, end, needs_decorator, function_name)
-        
-        # First pass - collect function info
-        for node in ast.walk(tree):
-            if isinstance(node, ast.FunctionDef):
-                if node.name == 'main':
-                    continue
-                    
-                start_line = node.lineno
-                end_line = node.end_lineno
-                # decorator_count below carries the decorator state
-                
-                # Check existing decorators
-                if hasattr(node, 'decorator_list'):
-                    decorator_count = 0
-                    for dec in node.decorator_list:
-                        if isinstance(dec, ast.Name) and dec.id == 'healing_agent':
-                            decorator_count += 1
+_FUNCTION_NODES = (ast.FunctionDef, ast.AsyncFunctionDef)
 
 
-                    # Multiple healing_agent decorators found
-                    if decorator_count > 1:
-                        changes_needed = True
-                        function_data.append((start_line, end_line, False, node.name))
-                        emit(f"♣ Function {node.name} has multiple healing_agent decorators")
-                    # No healing_agent decorator found
-                    elif decorator_count == 0:
-                        changes_needed = True
-                        function_data.append((start_line, end_line, True, node.name))
-                        emit(f"♣ Function {node.name} missing healing_agent decorator")
-                    # Exactly one healing_agent decorator - no change needed
-                    else:
-                        function_data.append((start_line, end_line, False, node.name))
-                else:
-                    # No decorators at all
-                    changes_needed = True
-                    function_data.append((start_line, end_line, True, node.name))
-                    emit(f"♣ Function {node.name} missing healing_agent decorator")
-        
-        if not changes_needed:
-            emit("♣ All functions have correct healing_agent decorator usage")
-            return False
-            
-        # Second pass - make corrections
-        lines = content.split('\n')
-        new_lines = []
-        i = 0
-        
-        while i < len(lines):
-            should_add = True
-            for start, _end, needs_decorator, _func_name in function_data:
-                if i == start - 1:  # Line before function def
-                    # Remove extra healing_agent decorators if present
-                    while i > 0 and lines[i-1].strip().startswith('@healing_agent'):
-                        i -= 1
-                        new_lines.pop()
-                    
-                    # Add single healing_agent decorator if needed
-                    if needs_decorator:
-                        new_lines.append('@healing_agent')
-                        
-                    break
-                    
-            if should_add:
-                new_lines.append(lines[i])
-            i += 1
-            
-        # Write back the corrected content
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write('\n'.join(new_lines))
-            
-        emit("♣ Successfully updated healing_agent decorators")
-        return True
-        
-    except Exception as e:
-        emit(f"♣ Error checking/correcting decorators: {str(e)}")
-        return False
+def node_start_line(node: ast.AST) -> int:
+    """First source line of a definition, decorators included."""
+    return min([node.lineno] + [d.lineno for d in node.decorator_list])
+
+
+def iter_function_nodes(node: ast.AST, prefix: str = "") -> Iterator[Tuple[str, ast.AST]]:
+    """Yield ``(qualname, node)`` for every function defined below ``node``.
+
+    Qualnames are built the way Python builds ``__qualname__``: a class adds its
+    own name, and a function adds its name plus ``<locals>`` for anything nested
+    inside it. That makes the tree directly comparable with the qualname the
+    captured context already carries, which is what makes a method findable at
+    all — a bare name cannot tell ``Loader.load`` from a module-level ``load``.
+    """
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.ClassDef):
+            yield from iter_function_nodes(child, f"{prefix}{child.name}.")
+        elif isinstance(child, _FUNCTION_NODES):
+            qualname = f"{prefix}{child.name}"
+            yield qualname, child
+            yield from iter_function_nodes(child, f"{qualname}.<locals>.")
+        else:
+            # if/try/with bodies are the same scope, so the prefix carries over.
+            yield from iter_function_nodes(child, prefix)
+
+
+def find_function_node(
+    tree: ast.AST,
+    qualname: Optional[str] = None,
+    name: Optional[str] = None,
+    line_hint: Optional[int] = None,
+) -> Optional[ast.AST]:
+    """Locate the definition a repair targets, or None if it is not unambiguous.
+
+    Ambiguity answers None deliberately. The same qualname can appear twice —
+    two branches of an ``if`` each defining it — and rewriting the wrong one is
+    worse than not repairing at all: a caller that gets None re-raises the
+    application's original exception, which is always a safe outcome.
+    """
+    found = list(iter_function_nodes(tree))
+
+    matches = [node for found_name, node in found if qualname and found_name == qualname]
+    if not matches and name:
+        # A context captured before qualnames were recorded, or a decorator that
+        # rewrote __qualname__: fall back to the bare name.
+        matches = [node for _, node in found if node.name == name]
+
+    if len(matches) > 1 and line_hint:
+        # `starting_line_number` is captured from the live module, so it settles
+        # conditional definitions that share a qualname. Both readings are
+        # accepted because the capture path excludes decorators and the splice
+        # path includes them.
+        narrowed = [
+            node for node in matches
+            if line_hint in (node.lineno, node_start_line(node))
+        ]
+        if narrowed:
+            matches = narrowed
+
+    return matches[0] if len(matches) == 1 else None
+
 
 def build_replacement_source(
     context: Dict, fixed_code: str
 ) -> Optional[Tuple[str, str]]:
     """Build the smallest source-file replacement without writing it."""
     file_path = context['error']['file']
-    function_name = context['function_info']['name']
+    function_info = context['function_info']
+    function_name = function_info['name']
+    qualname = function_info.get('qualname')
+    line_hint = function_info.get('starting_line_number')
 
     if not all([file_path, function_name, fixed_code]):
         emit("♣ Missing required parameters for code replacement")
@@ -113,6 +86,12 @@ def build_replacement_source(
     with open(file_path, 'r', encoding='utf-8') as file:
         source = file.read()
     tree = ast.parse(source)
+
+    # A candidate for a method is often generated at the indentation it was
+    # shown at. Normalising here means the parse below sees module-level code
+    # whatever the model produced, and the splice re-indents it to the column
+    # the original definition actually occupies.
+    fixed_code = textwrap.dedent(fixed_code)
 
     fixed_tree = ast.parse(fixed_code)
     if len(fixed_tree.body) != 1 or not isinstance(
@@ -138,7 +117,7 @@ def build_replacement_source(
             end_line = node.end_lineno
             break
     else:
-        emit(f"♣ Could not find function {function_name} in {file_path}")
+        emit(f"♣ Could not find function {function_name} in {file_path}", level=logging.ERROR)
         return None
 
     source_lines = source.splitlines(keepends=True)
@@ -198,7 +177,7 @@ def function_replacer(context: Dict, fixed_code: str) -> bool:
         return True
 
     except Exception as e:
-        emit(f"♣ Error updating file: {str(e)}")
+        emit(f"♣ Error updating file: {str(e)}", level=logging.ERROR)
         emit(f"♣ Error type: {type(e).__name__}")
         emit(f"♣ Error details: {repr(e)}")
         return False

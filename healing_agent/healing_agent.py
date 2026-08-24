@@ -1,3 +1,5 @@
+import inspect
+import logging
 from contextvars import ContextVar
 from functools import wraps
 from typing import Any, Callable, Dict, Optional
@@ -84,92 +86,23 @@ def healing_agent(
             try:
                 return func(*args, **kwargs)
             except Exception as original_error:
-                # The outermost invocation owns the healing session and is the
-                # only one allowed to restore sources, because repair attempts
-                # nest through the reloaded, still-decorated function.
-                session = _healing_session.get()
-                session_token = None
-                usage_token = None
-                if session is None:
-                    session = {"backups": {}, "restore_enabled": True, "config": {}}
-                    session_token = _healing_session.set(session)
-                    # Token accounting is scoped to the same outermost session,
-                    # so one repair's cost covers every nested attempt it made.
-                    usage_token = usage_ledger.start()
-                healed_successfully = False
-                try:
-                    config, _ = load_config()
-                    config.update(local_config)
-                    if session_token is not None:
-                        session["restore_enabled"] = bool(
-                            config.get("RESTORE_ON_FAILURE", True)
-                        )
-                        session["config"] = config
+                return _run_sync(
+                    _heal(func, args, kwargs, original_error, local_config, False)
+                )
 
-                    repair_key = _repair_key(func)
-                    attempts = _current_attempts()
-                    attempts_used = attempts.get(repair_key, 0)
-                    max_attempts = config.get("MAX_ATTEMPTS")
-                    if (
-                        isinstance(max_attempts, bool)
-                        or not isinstance(max_attempts, int)
-                        or max_attempts <= 0
-                    ):
-                        raise ValueError("MAX_ATTEMPTS must be a positive integer")
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            try:
+                return await func(*args, **kwargs)
+            except Exception as original_error:
+                return await _heal(
+                    func, args, kwargs, original_error, local_config, True
+                )
 
-                    if attempts_used >= max_attempts:
-                        emit(
-                            f"♣ Healing stopped after {max_attempts} repair "
-                            f"attempt(s) for {func.__qualname__}."
-                        )
-                        raise original_error
-
-                    next_attempts = dict(attempts)
-                    next_attempts[repair_key] = attempts_used + 1
-                    token = _repair_attempts.set(next_attempts)
-                    try:
-                        healed, result = _attempt_healing(
-                            func,
-                            args,
-                            kwargs,
-                            original_error,
-                            config,
-                            attempts_used + 1,
-                            max_attempts,
-                        )
-                        if healed:
-                            healed_successfully = True
-                            return result
-                    finally:
-                        _repair_attempts.reset(token)
-                except Exception as healing_error:
-                    if healing_error is original_error:
-                        raise
-                    emit(f"♣ Healing failed: {healing_error}")
-                    raise original_error from healing_error
-                finally:
-                    # A definitive failure must not leave a half-healed source
-                    # file behind; the candidate stays in _healing_agent_fixes/.
-                    if session_token is not None:
-                        if (session.get("config") or {}).get("DEBUG"):
-                            emit(f"♣ Model usage: {usage_ledger.describe()}")
-                        if not healed_successfully:
-                            if session["restore_enabled"]:
-                                _restore_session_sources(session)
-                            # Plan B: escalate so the failure is not lost. The
-                            # helper is a no-op unless issue_on_failure is set,
-                            # and never raises over the application's error.
-                            if session.get("context") is not None:
-                                open_issue_for_failure(
-                                    session["context"], session["config"]
-                                )
-                        _healing_session.reset(session_token)
-                        usage_ledger.reset(usage_token)
-
-                # AUTO_FIX=False, an invalid proposal, or an unavailable reload
-                # must never turn an application failure into an implicit None.
-                raise
-
+        # An async function returns its coroutine before the body runs, so a
+        # synchronous wrapper never sees the exception and never heals it.
+        if inspect.iscoroutinefunction(func):
+            return async_wrapper
         return wrapper
 
     if func is None:
@@ -177,7 +110,147 @@ def healing_agent(
     return decorator(func)
 
 
-def _attempt_healing(
+async def _invoke(target: Callable[..., Any], args: tuple, kwargs: dict, awaiting: bool):
+    """Call back into the user's code, awaiting the result when appropriate.
+
+    `awaiting` says the decorated function was a coroutine function, but the
+    check stays on the RESULT: a candidate repair is generated text, and a
+    model that answers an `async def` with a plain `def` would otherwise turn
+    a working repair into "object is not awaitable".
+    """
+    result = target(*args, **kwargs)
+    if awaiting and inspect.isawaitable(result):
+        result = await result
+    return result
+
+
+def _run_sync(coro):
+    """Run the healing session for a synchronous function.
+
+    `_heal` is written once, as a coroutine, so the session bookkeeping is not
+    duplicated for async callers. With ``awaiting=False`` it has no suspension
+    points, so a single ``send(None)`` runs it to completion and the return
+    value arrives on ``StopIteration``. Exceptions propagate untouched, which
+    is what keeps the original error the one that reaches the application.
+
+    Should a real ``await`` ever be introduced into the session, this fails
+    loudly instead of silently returning a coroutine nobody awaits.
+    """
+    try:
+        coro.send(None)
+    except StopIteration as completed:
+        return completed.value
+    coro.close()
+    raise RuntimeError(
+        "the healing session suspended in a synchronous context; "
+        "_heal must not await anything unless awaiting=True"
+    )
+
+
+async def _heal(
+    func: Callable[..., Any],
+    args: tuple,
+    kwargs: dict,
+    original_error: Exception,
+    local_config: dict,
+    awaiting: bool,
+) -> Any:
+    """Own one healing session and return the repaired result, or re-raise.
+
+    Shared verbatim by the synchronous and asynchronous wrappers. Only the
+    calls into the user's own code differ, and `awaiting` selects those; every
+    other step - config, attempt budget, backup, apply, verify, restore,
+    escalation - is identical and lives here exactly once.
+    """
+    # The outermost invocation owns the healing session and is the
+    # only one allowed to restore sources, because repair attempts
+    # nest through the reloaded, still-decorated function.
+    session = _healing_session.get()
+    session_token = None
+    usage_token = None
+    if session is None:
+        session = {"backups": {}, "restore_enabled": True, "config": {}}
+        session_token = _healing_session.set(session)
+        # Token accounting is scoped to the same outermost session,
+        # so one repair's cost covers every nested attempt it made.
+        usage_token = usage_ledger.start()
+    healed_successfully = False
+    try:
+        config, _ = load_config()
+        config.update(local_config)
+        if session_token is not None:
+            session["restore_enabled"] = bool(
+                config.get("RESTORE_ON_FAILURE", True)
+            )
+            session["config"] = config
+
+        repair_key = _repair_key(func)
+        attempts = _current_attempts()
+        attempts_used = attempts.get(repair_key, 0)
+        max_attempts = config.get("MAX_ATTEMPTS")
+        if (
+            isinstance(max_attempts, bool)
+            or not isinstance(max_attempts, int)
+            or max_attempts <= 0
+        ):
+            raise ValueError("MAX_ATTEMPTS must be a positive integer")
+
+        if attempts_used >= max_attempts:
+            emit(
+                f"♣ Healing stopped after {max_attempts} repair "
+                f"attempt(s) for {func.__qualname__}."
+            )
+            raise original_error
+
+        next_attempts = dict(attempts)
+        next_attempts[repair_key] = attempts_used + 1
+        token = _repair_attempts.set(next_attempts)
+        try:
+            healed, result = await _attempt_healing(
+                func,
+                args,
+                kwargs,
+                original_error,
+                config,
+                attempts_used + 1,
+                max_attempts,
+                awaiting,
+            )
+            if healed:
+                healed_successfully = True
+                return result
+        finally:
+            _repair_attempts.reset(token)
+    except Exception as healing_error:
+        if healing_error is original_error:
+            raise
+        emit(f"♣ Healing failed: {healing_error}", level=logging.ERROR)
+        raise original_error from healing_error
+    finally:
+        # A definitive failure must not leave a half-healed source
+        # file behind; the candidate stays in _healing_agent_fixes/.
+        if session_token is not None:
+            if (session.get("config") or {}).get("DEBUG"):
+                emit(f"♣ Model usage: {usage_ledger.describe()}")
+            if not healed_successfully:
+                if session["restore_enabled"]:
+                    _restore_session_sources(session)
+                # Plan B: escalate so the failure is not lost. The
+                # helper is a no-op unless issue_on_failure is set,
+                # and never raises over the application's error.
+                if session.get("context") is not None:
+                    open_issue_for_failure(
+                        session["context"], session["config"]
+                    )
+            _healing_session.reset(session_token)
+            usage_ledger.reset(usage_token)
+
+    # AUTO_FIX=False, an invalid proposal, or an unavailable reload
+    # must never turn an application failure into an implicit None.
+    raise original_error
+
+
+async def _attempt_healing(
     func: Callable[..., Any],
     args: tuple,
     kwargs: dict,
@@ -185,8 +258,13 @@ def _attempt_healing(
     config: dict,
     attempt_number: int,
     max_attempts: int,
+    awaiting: bool = False,
 ) -> tuple[bool, Any]:
-    """Try one repair and report whether a repaired result was produced."""
+    """Try one repair and report whether a repaired result was produced.
+
+    `awaiting` is True when the decorated function is a coroutine function, and
+    selects whether the two calls back into the user's code are awaited.
+    """
     import importlib.util
     import inspect
     import sys
@@ -286,7 +364,7 @@ def _attempt_healing(
     ):
         if install_missing_module(str(error), config.get("DEBUG", False)):
             emit(f"♣ Successfully installed missing module: {error}")
-            return True, func(*args, **kwargs)
+            return True, await _invoke(func, args, kwargs, awaiting)
 
     if not config.get("AUTO_FIX", True) or not fixed_code:
         return False, None
@@ -317,10 +395,10 @@ def _attempt_healing(
                 stage=bool(config.get("GIT_STAGE", False)),
             )
         except Exception as git_error:
-            emit(f"♣ Git refused the candidate patch: {git_error}")
+            emit(f"♣ Git refused the candidate patch: {git_error}", level=logging.ERROR)
             return False, None
     elif not function_replacer(context, fixed_code):
-        emit("♣ Generated fix could not be applied.")
+        emit("♣ Generated fix could not be applied.", level=logging.ERROR)
         return False, None
 
     module_name = func.__module__
@@ -341,7 +419,7 @@ def _attempt_healing(
     try:
         spec.loader.exec_module(new_module)
         updated_func = getattr(new_module, func.__name__)
-        result = updated_func(*args, **kwargs)
+        result = await _invoke(updated_func, args, kwargs, awaiting)
     except Exception:
         # Do not leave a partially loaded or still-failing repaired module in
         # sys.modules. The source backup remains available for explicit rollback.

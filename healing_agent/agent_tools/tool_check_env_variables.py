@@ -1,6 +1,7 @@
 # Experimental and not used.
 
 import os
+from ..console import emit
 
 def get_environment_variables() -> dict:
     """
@@ -15,5 +16,5 @@ def get_environment_variables() -> dict:
     return env_vars
 
 if __name__ == "__main__":
-    print(get_environment_variables())
+    emit(get_environment_variables())
 

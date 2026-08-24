@@ -5,8 +5,79 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [Unreleased] — releasing as 0.5.0
+Adds functionality, removes nothing: a MINOR bump. `CONFIG_SCHEMA_VERSION` also
+moves to `0.5.0` because `LOG_MODE` is a new configuration key; a config file
+predating it keeps working and is completed from the template on load.
+
 ### Added
+- **The captured evidence is now one complete package: environment included,
+  saved, sent to the model, and attached to an escalated issue.** Previously
+  the process environment was not captured at all, the captured variables were
+  saved but never sent, and an issue carried only pointers to files on the
+  machine that failed. The package is now the same everywhere; only its SIZE
+  differs by destination.
+  - `environment`: every variable NAME is kept, because knowing that a
+    credential is set, or that a feature flag exists, is itself diagnostic.
+    Values pass two filters, not one — the usual name matching, plus **value
+    scrubbing** for the secrets that hide under harmless names. Name matching
+    alone leaked 4 of 7 realistic samples: `DATABASE_URL` carries a password
+    inside a URL, `SENTRY_DSN` embeds a key, a licence variable holds a JWT.
+    URL credentials, GitHub/OpenAI/Stripe/Slack/AWS/Google token shapes, JWTs
+    and PEM headers are masked; scheme, host and path survive so the value
+    stays diagnostic. Switch off with `CAPTURE_ENVIRONMENT = False`
+  - Local variables and the environment now reach the fix prompt
+  - `GITHUB["issue_detail"]` defaults to `redacted`, so an escalated issue
+    carries the evidence an agent or a human needs instead of paths on a
+    machine they cannot reach
+  - Sizes: `CAPTURE_VALUE_CHARS` (3000) is what lands on disk, so the artifact
+    stays searchable later; `PROMPT_VALUE_CHARS` (300) is what leaves the
+    machine, because a prompt is paid for by the token and an issue body has a
+    hard GitHub limit. The saved artifact is capped at 3 MB in total and is
+    trimmed, never dropped, if it would exceed that
+
+  **Behavior change:** repairs cost more tokens, and an escalated issue now
+  contains captured values. Both were previously impossible to enable. Set
+  `CAPTURE_ENVIRONMENT = False` and `issue_detail = "reference"` for the old
+  behavior.
+- **`async def` functions are healed.** A coroutine function returns its
+  coroutine before its body runs, so the synchronous wrapper's `try` never saw
+  the exception: it surfaced at the caller's `await`, outside the decorator,
+  and healing was skipped entirely for every async function. The decorator now
+  returns an async wrapper for coroutine functions. The session itself is
+  written once — config, attempt budget, backup, apply, verify, restore,
+  escalation — and shared by both wrappers, so there is no second pipeline to
+  keep in step. Only the calls back into the user's own code differ. A
+  candidate that answers an `async def` with a plain `def` is still usable: the
+  result is awaited when it is awaitable, not merely because the original was
+  a coroutine function
+- **Healing Agent's own output now inherits the application's logging.**
+  Messages go to the standard logger `healing_agent`, which the library never
+  configures, so the host application's level, handlers, formatters and filters
+  apply through the normal logger hierarchy — no third-party logger becomes a
+  dependency. `LOG_MODE` selects how:
+  - `auto` (default) — use the logger when the application configured logging
+    for our records, print to the console when it did not, which is exactly the
+    previous behavior for an application that configured nothing
+  - `logging` — always use the logger
+  - `print` — always print, whatever the application configured
+
+  **Behavior change:** an application that HAS configured logging no longer
+  gets Healing Agent's console narration; its records now follow that
+  configuration, including its level. An app configured at `WARNING` therefore
+  stops seeing the `INFO` narration. Set `LOG_MODE = "print"` to keep the
+  console output regardless.
+
+  Messages carry levels: `WARNING` and `ERROR` for the failure reports,
+  `DEBUG`-gated narration unchanged, `INFO` for the rest. The `♣` / `⚠`
+  decoration is stripped on the logging path, where the formatter already
+  supplies level and timestamp, and kept on the console path
+- The log ring buffer no longer records Healing Agent's own narration. It
+  attaches to the root logger, so once the agent logged through the hierarchy
+  its messages would have been fed back into the context sent to the model,
+  crowding out the application lines that actually explain the failure. It is
+  also no longer mistaken for "the application configured logging", which would
+  have silenced the console the moment log capture was armed
 - **`healing_agent.request_healing(reason, details=...)`: ask for a repair from
   a handled error branch.** Until now only an escaping exception could reach
   the healing loop, but a loader usually detects the problem itself — a missing
@@ -21,6 +92,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The GitHub escalation shipped in 0.4.0 is finally documented in the README —
   it worked and was live-verified, but nothing outside the config template
   mentioned it, so it was undiscoverable
+
+### Fixed
+- The four `agent_tools` modules printed directly instead of going through
+  `console.emit()`. `tool_install_missing_module` runs on the healing path and
+  its messages carry `♣`, so the `UnicodeEncodeError` that 0.4.0 fixed — a
+  reporting crash replacing the application's own exception on a cp1252
+  console — was still reachable through it
 
 ## [0.4.1] - 2026-08-24
 No breaking changes. Adds the first externally contributed feature and corrects

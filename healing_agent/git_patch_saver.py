@@ -14,6 +14,7 @@ import datetime as _datetime
 import difflib
 import hashlib
 import json
+import logging
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -257,5 +258,5 @@ def save_git_patch(context: dict) -> Optional[str]:
             return None
         return str(artifact.patch_path)
     except Exception as error:
-        emit(f"♣ Failed to save Git patch: {error}")
+        emit(f"♣ Failed to save Git patch: {error}", level=logging.ERROR)
         return None

@@ -48,6 +48,54 @@ DEFAULT_SENSITIVE_PATTERNS = [
     r"passphrase",
 ]
 
+# --- Value-level scrubbing --------------------------------------------------
+# Name-based redaction is not enough for environment variables, the most
+# secret-dense structure in a process: `DATABASE_URL` carries a password inside
+# a URL, `SENTRY_DSN` embeds a key, and a licence variable may hold a JWT. None
+# of those names look sensitive. These patterns catch the value instead.
+
+_URL_CREDENTIALS = re.compile(
+    r"(?P<scheme>[a-zA-Z][\w+.-]*://)(?P<user>[^:/@\s]+)(?::(?P<password>[^@/\s]+))?@"
+)
+
+_SECRET_SHAPES = re.compile(
+    r"("
+    r"gh[pousr]_[A-Za-z0-9]{16,}"                                        # GitHub
+    r"|github_pat_[A-Za-z0-9_]{20,}"
+    r"|sk-[A-Za-z0-9_-]{16,}"                                            # OpenAI style
+    r"|(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,}"                      # Stripe style
+    r"|xox[baprs]-[A-Za-z0-9-]{10,}"                                     # Slack
+    r"|AKIA[0-9A-Z]{16}"                                                 # AWS key id
+    r"|ya29\.[A-Za-z0-9_-]{20,}"                                         # Google OAuth
+    r"|eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{5,}"       # JWT
+    r"|-----BEGIN [A-Z ]*PRIVATE KEY-----"                               # PEM
+    r")"
+)
+
+
+def scrub_value(text: Any, placeholder: str = DEFAULT_PLACEHOLDER) -> Any:
+    """Mask secrets that hide in a VALUE rather than in its name.
+
+    Returns the text with URL credentials and recognisable token shapes
+    replaced. Anything unrecognised is returned untouched: this is a denylist,
+    and the honest limit is that a bespoke secret format under a harmless name
+    will pass. Add its name to ``REDACT_EXTRA_PATTERNS`` when you have one.
+    """
+    if not isinstance(text, str) or not text:
+        return text
+
+    def _mask_credentials(match):
+        # A lone userinfo is masked too: in a configuration value it is far
+        # more often a key (a Sentry DSN, a tokenised git remote) than a
+        # username. Scheme, host and path survive, which is the diagnostic part.
+        if match.group("password"):
+            return f"{match.group('scheme')}{match.group('user')}:{placeholder}@"
+        return f"{match.group('scheme')}{placeholder}@"
+
+    scrubbed = _URL_CREDENTIALS.sub(_mask_credentials, text)
+    return _SECRET_SHAPES.sub(placeholder, scrubbed)
+
+
 # Guard against pathological / self-referential structures.
 _MAX_DEPTH = 25
 

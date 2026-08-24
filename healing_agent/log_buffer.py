@@ -27,7 +27,7 @@ import logging
 from collections import deque
 from typing import Any, Dict, List, Optional
 
-from .console import emit
+from .console import LOGGER_NAME, emit
 
 # Keep single records from dominating the prompt.
 MAX_RECORD_CHARS = 300
@@ -38,12 +38,21 @@ _handler: Optional["RingBufferHandler"] = None
 class RingBufferHandler(logging.Handler):
     """Keeps the most recent formatted log records in memory."""
 
+    # Marks this handler as Healing Agent's own, so console.py does not mistake
+    # it for the application having configured logging.
+    _healing_agent_internal = True
+
     def __init__(self, size: int, level: int = logging.INFO):
         super().__init__(level=level)
         self.records: deque = deque(maxlen=size)
         self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
 
     def emit(self, record: logging.LogRecord) -> None:  # noqa: A003 - logging API
+        # The buffer is evidence about the APPLICATION. Healing Agent's own
+        # narration would otherwise be fed back into the context sent to the
+        # model, crowding out the lines that actually explain the failure.
+        if record.name == LOGGER_NAME or record.name.startswith(LOGGER_NAME + "."):
+            return
         try:
             line = self.format(record)
             if len(line) > MAX_RECORD_CHARS:

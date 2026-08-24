@@ -2,12 +2,18 @@ import json
 import datetime
 import traceback
 import inspect
+import os
 import sys
 import ast
 from typing import Optional, Any, Dict, Callable
 import requests
 
-from .redactor import get_sensitive_matcher, is_sensitive_name, DEFAULT_PLACEHOLDER
+from .redactor import (
+    DEFAULT_PLACEHOLDER,
+    get_sensitive_matcher,
+    is_sensitive_name,
+    scrub_value,
+)
 
 # Healing-agent's own wrapper-frame variables. In production, capture_context
 # runs inside the decorator wrapper, so its caller frame holds these internals
@@ -53,6 +59,86 @@ def get_function_source(func: Callable) -> tuple[list[str], int]:
     # Fallback to inspect
     return inspect.getsourcelines(func)
 
+#: Per-value capture limit. Generous, because the artifact on disk is meant to
+#: be searchable later; what reaches a prompt or an issue is trimmed further at
+#: render time by PROMPT_VALUE_CHARS.
+DEFAULT_VALUE_CHARS = 3000
+
+
+def _value_limit(config: Optional[dict] = None) -> int:
+    try:
+        limit = int((config or {}).get("CAPTURE_VALUE_CHARS", DEFAULT_VALUE_CHARS))
+    except (TypeError, ValueError):
+        return DEFAULT_VALUE_CHARS
+    return limit if limit > 0 else DEFAULT_VALUE_CHARS
+
+
+#: Per-value limit when evidence LEAVES the machine — a prompt or an issue.
+#: Smaller than the capture limit on purpose: the artifact on disk is meant to
+#: be searchable later, a prompt is paid for by the token.
+DEFAULT_PROMPT_VALUE_CHARS = 300
+
+
+def prompt_value_limit(config: Optional[dict] = None) -> int:
+    try:
+        limit = int(
+            (config or {}).get("PROMPT_VALUE_CHARS", DEFAULT_PROMPT_VALUE_CHARS)
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_PROMPT_VALUE_CHARS
+    return limit if limit > 0 else DEFAULT_PROMPT_VALUE_CHARS
+
+
+def trim_values(obj: Any, limit: int, _depth: int = 0) -> Any:
+    """Return a copy of ``obj`` with every string trimmed to ``limit``.
+
+    Used on the way out, so the same captured context can be rich on disk and
+    affordable in a prompt without capturing it twice.
+    """
+    if _depth > 25:
+        return obj
+    if isinstance(obj, str):
+        return obj if len(obj) <= limit else obj[:limit] + " …"
+    if isinstance(obj, dict):
+        return {key: trim_values(value, limit, _depth + 1) for key, value in obj.items()}
+    if isinstance(obj, list):
+        return [trim_values(value, limit, _depth + 1) for value in obj]
+    if isinstance(obj, tuple):
+        return tuple(trim_values(value, limit, _depth + 1) for value in obj)
+    return obj
+
+
+def capture_environment(config: Optional[dict] = None) -> Dict[str, Any]:
+    """Capture the process environment, redacted by name AND by value.
+
+    Which environment a failure happened in is often the whole diagnosis: a
+    different deployment, a different locale, a feature flag that is set here
+    and not there. It is also the most secret-dense structure in a process, so
+    two filters apply rather than one — the usual name matching, plus value
+    scrubbing for the secrets that hide under harmless names (`DATABASE_URL`
+    carries a password inside a URL, `SENTRY_DSN` embeds a key).
+
+    Every NAME is kept even when its value is masked: knowing that
+    `AWS_SECRET_ACCESS_KEY` is set, or that a feature flag exists at all, is
+    itself diagnostic.
+    """
+    matcher = get_sensitive_matcher(config)
+    placeholder = (config or {}).get("REDACT_PLACEHOLDER") or DEFAULT_PLACEHOLDER
+    limit = _value_limit(config)
+
+    environment = {}
+    for name, value in os.environ.items():
+        if is_sensitive_name(name, matcher):
+            environment[name] = placeholder
+            continue
+        try:
+            scrubbed = scrub_value(value, placeholder)
+        except Exception:
+            scrubbed = placeholder
+        environment[name] = scrubbed[:limit] if isinstance(scrubbed, str) else scrubbed
+    return environment
+
+
 def capture_context(
     func: Optional[Callable] = None,
     args: Optional[tuple] = None,
@@ -90,6 +176,16 @@ def capture_context(
         'platform': sys.platform,
         'capture_type': 'error' if error else 'debug'
     }
+
+    # Which environment the failure happened in is often the whole diagnosis.
+    # Captured with both filters applied; see capture_environment.
+    if (config or {}).get('CAPTURE_ENVIRONMENT', True):
+        try:
+            context['environment'] = capture_environment(config)
+        except Exception as environment_error:
+            context['environment'] = {
+                'note': f'Failed to capture environment: {environment_error}'
+            }
 
     # Capture function context if provided
     if func:
@@ -140,6 +236,7 @@ def capture_context(
     if frame:
         # Matcher for name-based secret redaction of variable previews.
         _matcher = get_sensitive_matcher(config)
+        _limit = _value_limit(config)
 
         def _preview(key, value):
             """Build a {type, value_preview} entry, redacting sensitive names."""
@@ -147,7 +244,7 @@ def capture_context(
             if is_sensitive_name(key, _matcher):
                 return {'type': type_name, 'value_preview': DEFAULT_PLACEHOLDER}
             try:
-                var_str = str(value)[:200]
+                var_str = str(value)[:_limit]
             except Exception:
                 var_str = '<Error converting to string>'
             return {'type': type_name, 'value_preview': var_str}

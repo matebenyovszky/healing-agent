@@ -1,8 +1,10 @@
 # Experimental and not used.
 
+import logging
 import json
 from typing import Any, Dict
 from ..ai_code_fixer import get_ai_response
+from ..console import emit
 
 def fix_json_ai(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
     """
@@ -31,7 +33,7 @@ Return only the fixed JSON data without any explanations or markdown formatting.
         
         return fixed_data
     except Exception as e:
-        print(f"♣ JSON fixing with AI failed: {str(e)}")
+        emit(f"♣ JSON fixing with AI failed: {str(e)}", level=logging.ERROR)
         return None
 
 def fix_json_lint(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
@@ -44,7 +46,7 @@ def fix_json_lint(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
         # text; until then the caller falls through to the AI-based fixer.
         _json_data = context['error']['json_details']['response_text']
     except Exception as e:
-        print(f"♣ JSON linting failed: {str(e)}")
+        emit(f"♣ JSON linting failed: {str(e)}", level=logging.ERROR)
         return None
 
 def fix_json_fallback(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
@@ -57,7 +59,7 @@ def fix_json_fallback(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
         fixed_data = json.loads(json_data, strict=False)
         return fixed_data
     except json.JSONDecodeError as e:
-        print(f"♣ Fallback JSON parsing failed: {str(e)}")
+        emit(f"♣ Fallback JSON parsing failed: {str(e)}", level=logging.ERROR)
         return None
 
 def fix_json(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
@@ -73,6 +75,6 @@ def fix_json(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
     elif strategy == 'fallback':
         return fix_json_fallback(context, config)
     else:
-        print(f"♣ Unknown JSON fix strategy: {strategy}")
+        emit(f"♣ Unknown JSON fix strategy: {strategy}", level=logging.ERROR)
         return None
 

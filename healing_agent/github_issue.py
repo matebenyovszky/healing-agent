@@ -19,6 +19,7 @@ holds the token (never the token itself), and the `gh` CLI is used as a
 fallback. Nothing here may ever raise into the healed application.
 """
 
+import logging
 import datetime
 import hashlib
 import json
@@ -142,7 +143,7 @@ def _anonymize(payload: str, config: Dict[str, Any]) -> Optional[str]:
 def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, str]:
     """Build the issue title and body for a failed healing session."""
     github_config = config.get("GITHUB") or {}
-    detail = str(github_config.get("issue_detail", "reference")).lower()
+    detail = str(github_config.get("issue_detail", "redacted")).lower()
 
     error = context.get("error") or {}
     function_info = context.get("function_info") or {}
@@ -180,7 +181,16 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
         lines += ["", "### Analysis", "", str(hint)]
 
     if detail in {"redacted", "ai-anonymized"}:
-        payload = json.dumps(context, indent=2, ensure_ascii=False, default=str)
+        # Trim on the way out: the artifact on disk stays rich, the issue body
+        # has a hard GitHub limit and a human has to read it.
+        from .exception_handler import prompt_value_limit, trim_values
+
+        payload = json.dumps(
+            trim_values(context, prompt_value_limit(config)),
+            indent=2,
+            ensure_ascii=False,
+            default=str,
+        )
         if detail == "ai-anonymized":
             payload = _anonymize(payload, config)
         if payload:
@@ -243,7 +253,7 @@ def find_existing_issue(
             if fingerprint in (issue.get("body") or ""):
                 return issue.get("html_url")
     except Exception as error:
-        emit(f"♣ Could not check for an existing issue: {error}")
+        emit(f"♣ Could not check for an existing issue: {error}", level=logging.ERROR)
     return None
 
 

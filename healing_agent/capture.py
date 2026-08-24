@@ -17,6 +17,7 @@ written next to the calling module in `_healing_agent_captures/`. Nothing is
 sent to a provider and no code is modified: this is observation, not healing.
 """
 
+import logging
 import datetime
 import inspect
 import json
@@ -51,10 +52,10 @@ def save_capture(context: Dict[str, Any], directory: str, label: Optional[str]) 
             with open(file_path, "w", encoding="utf-8") as handle:
                 json.dump(context, handle, indent=2, ensure_ascii=False, default=str)
         except Exception as write_error:
-            emit(f"♣ Failed to write capture to {file_path}: {write_error}")
+            emit(f"♣ Failed to write capture to {file_path}: {write_error}", level=logging.ERROR)
             file_path = None
     except Exception as save_error:
-        emit(f"♣ Failed to save capture: {save_error}")
+        emit(f"♣ Failed to save capture: {save_error}", level=logging.ERROR)
         file_path = None
     return file_path
 
