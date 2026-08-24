@@ -8,6 +8,7 @@ it observes, and the ring buffer must be genuinely off when not configured.
 import importlib
 import json
 import logging
+import os
 
 import pytest
 
@@ -80,7 +81,12 @@ def test_capture_never_raises(monkeypatch):
 def test_capture_filename_is_sanitised(tmp_path):
     path = capture_module.capture("weird/label: with*chars", CAPTURE_DIR=str(tmp_path))
     assert path is not None
-    assert "/" not in path.rsplit("\\", 1)[-1].replace("\\", "")
+    # Take the basename the way the running platform defines it: splitting on
+    # "\\" by hand passes on Windows and fails on POSIX, where the whole path
+    # is then searched for the separator it obviously contains.
+    filename = os.path.basename(path)
+    assert not {"/", "\\", ":", "*"} & set(filename)
+    assert filename.endswith("weird_label_with_chars.json")
 
 
 # --- ring buffer -------------------------------------------------------------

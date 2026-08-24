@@ -158,8 +158,13 @@ def main() -> None:
     check_schema_version(version)
     run(sys.executable, "-m", "ruff", "check", ".")
     ok("ruff check passed")
-    run(sys.executable, "-m", "pytest", "-q")
-    ok("test suite passed")
+    # Deterministic tests only. The `live` data-healing scenarios call a real
+    # model, so their outcome depends on the quality of a generated repair
+    # rather than on this code — a flaky model must not be able to block a
+    # release, and CI cannot run them at all. Run them as evidence, separately:
+    #     python -m pytest -m live -v
+    run(sys.executable, "-m", "pytest", "-q", "-m", "not live")
+    ok("test suite passed (live model scenarios excluded — run them separately)")
     build(version)
 
     if not args.publish:

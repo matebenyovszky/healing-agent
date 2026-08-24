@@ -114,6 +114,15 @@ GIT_MODE = "off"
 GIT_PATCH_DIR = None  # Optional directory for patch + JSON provenance artifacts
 GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 
+# Verification gate configuration
+# -------------------------------
+# Optional ordered command gates run on an isolated candidate copy BEFORE the
+# live source file is changed. Exit code 0 means pass; any nonzero exit rejects
+# the candidate. Protocol-aware tools may read HEALING_AGENT_CANDIDATE and print
+# JSON detail to stdout, but the exit code decides.
+VERIFY_COMMAND = None  # e.g. "pytest tests/test_loader.py" or ["python", "check.py"]
+VERIFY_TIMEOUT_SECONDS = 120
+
 # GitHub Integration
 # ------------------
 # Escalation for failures healing could not repair: an issue in your own
