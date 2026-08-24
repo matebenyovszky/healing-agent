@@ -272,13 +272,24 @@ There is deliberately no separate "tests" gate: an application test run IS a
 command. One gate type covers self-contained checkers, hidden-test engines,
 linters, or anything else that can express pass/fail as an exit code.
 
-**Workspace scope, honestly.** The shipped gate isolates the candidate FILE,
-not the project, so a project-level test run cannot execute in it — an earlier
-draft of this document used `pytest tests/test_loader.py` as the example and
-was wrong to. Running the application's own suite needs the whole project
-present with one file swapped, which means a filtered copy of the WORKING TREE
-(not a `git worktree`, which checks out HEAD and would quietly judge different
-code than the one that is running). That is the next step for this gate.
+**Workspace scope.** `VERIFY_SCOPE` decides what a gate can see:
+
+| Scope | Workspace | Serves |
+|---|---|---|
+| `file` (default) | a temp directory holding the candidate file alone | self-contained checkers, sandbox engines |
+| `project` | a filtered copy of the project as it is now, candidate applied | the application's own test suite |
+
+The project scope copies the WORKING TREE rather than using `git worktree`,
+deliberately: a worktree checks out `HEAD`, so with uncommitted changes — the
+normal state of a machine someone is working on — the gate would judge code
+other than the code that is running. It refuses and falls back to `file` when
+the tree exceeds a size guard, so a misjudged scope costs the gate its reach
+rather than failing the repair.
+
+An earlier draft of this document used `pytest tests/test_loader.py` as the
+example while only the file scope existed. That was wrong twice over: it could
+not work, and it failed as a *rejection*, discarding valid repairs. With
+`VERIFY_SCOPE = "project"` the example is now true.
 
 `pr-checks` is the zero-config profile: no per-function declarations — the
 whole existing suite validates the repair, using infrastructure the team

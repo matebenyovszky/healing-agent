@@ -120,3 +120,63 @@ def test_several_gates_run_in_order_and_stop_at_the_first_rejection(tmp_path):
         {"VERIFY_COMMAND": [[sys.executable, str(reject)], [sys.executable, str(second)]]},
     )
     assert not marker.exists(), "a later gate ran after an earlier one rejected"
+
+
+def test_project_scope_lets_the_applications_own_test_suite_run(tmp_path):
+    """The case the file scope cannot serve, and which the docs once promised.
+
+    A project-level test imports siblings and expects its layout to exist, so
+    it needs the project present with the candidate swapped in — not one file
+    in an empty directory.
+    """
+    project = tmp_path / "app"
+    (project / "tests").mkdir(parents=True)
+    source = project / "loader.py"
+    source.write_text("def broken():\n    return 1\n", encoding="utf-8")
+    (project / "tests" / "test_loader.py").write_text(
+        "import sys\nsys.path.insert(0, '.')\nimport loader\n"
+        "def test_it():\n    assert loader.broken() == 2\n",
+        encoding="utf-8",
+    )
+
+    config = {
+        "VERIFY_SCOPE": "project",
+        "VERIFY_COMMAND": [sys.executable, "-m", "pytest", "-q", "tests/test_loader.py"],
+    }
+
+    # The correct candidate passes...
+    assert verify_candidate(_context(source), "def broken():\n    return 2\n", config)
+    # ...and a wrong one is rejected by the application's own test.
+    assert not verify_candidate(_context(source), "def broken():\n    return 99\n", config)
+    # Either way the live file never changed.
+    assert source.read_text(encoding="utf-8") == "def broken():\n    return 1\n"
+
+
+def test_project_scope_falls_back_when_the_tree_is_too_large(tmp_path, monkeypatch):
+    """A misjudged scope must degrade the gate's reach, not fail the repair."""
+    import healing_agent.workspace as workspace_module
+
+    source = tmp_path / "demo.py"
+    source.write_text("def broken():\n    return 1\n", encoding="utf-8")
+    monkeypatch.setattr(workspace_module, "DEFAULT_MAX_FILES", 0)
+
+    probe = tmp_path / "probe.py"
+    probe.write_text("import sys; sys.exit(0)\n", encoding="utf-8")
+    assert verify_candidate(
+        _context(source),
+        "def broken():\n    return 2\n",
+        {"VERIFY_SCOPE": "project", "VERIFY_COMMAND": [sys.executable, str(probe)]},
+    )
+
+
+def test_invalid_scope_is_a_configuration_error(tmp_path):
+    import pytest
+
+    source = tmp_path / "demo.py"
+    source.write_text("def broken():\n    return 1\n", encoding="utf-8")
+    with pytest.raises(verify_gate.VerifyGateConfigurationError):
+        verify_candidate(
+            _context(source),
+            "def broken():\n    return 2\n",
+            {"VERIFY_SCOPE": "worktree", "VERIFY_COMMAND": ["echo"]},
+        )

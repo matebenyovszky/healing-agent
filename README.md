@@ -180,6 +180,11 @@ SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
 GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded git apply)
 
+# Verification gates: run before the live file changes, exit code 0 accepts
+VERIFY_COMMAND = None     # e.g. ["python", "checks/verify_loader.py"]; list of lists = ordered gates
+VERIFY_SCOPE = "file"     # file = candidate alone | project = filtered copy of the project, so your own tests can run
+VERIFY_TIMEOUT_SECONDS = 120
+
 # Observation (see "Observing without a failure" above)
 LOG_BUFFER_SIZE = 0       # 0 or absent = ring buffer never installed; N = keep and send N records
 LOG_BUFFER_LEVEL = "INFO" # Minimum level the buffer records

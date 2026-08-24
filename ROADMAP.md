@@ -75,12 +75,17 @@ full specification in
    results — sample, then filter by execution, instead of steering a single
    attempt through an agent loop. Worth adding only when the benchmark
    (item 13) can show it beats one candidate plus one retry, per unit cost.
-2. **One unified `command` verify gate** — any command run inside the
-   isolated candidate workspace, pass = exit 0: the app's own pytest
-   (`@healing_agent(VERIFY_COMMAND="pytest tests/test_loader.py")`, also
-   settable in config), an external sandbox/hidden-test engine, a linter.
-   No separate "tests" gate: a test run IS a command. *Acceptance: a heal
-   that fails the declared verify command never reaches the source tree.*
+2. **One unified `command` verify gate** — [x] shipped in 0.4.1 (contributed
+   in [#1](https://github.com/matebenyovszky/healing-agent/pull/1)) and
+   extended with `VERIFY_SCOPE`: any command run in an isolated workspace,
+   pass = exit 0, with the scope deciding what it can see — the candidate file
+   alone (`file`, default) or a filtered copy of the project (`project`) so the
+   application's own test suite can run. No separate "tests" gate: a test run
+   IS a command. A gate that cannot start raises rather than rejecting, so a
+   misconfiguration never masquerades as a bad candidate.
+   *Acceptance met: a heal that fails the declared verify command never
+   reaches the source tree, verified by tests that assert the live file is
+   byte-identical after a rejection.*
 3. **PR flow with repository CI as the zero-config gate** (`pr-checks` +
    `APPLY="pr"`) — branch → commit patch → push → draft PR built from the
    redacted provenance sidecar; optionally wait for the repository's OWN CI
