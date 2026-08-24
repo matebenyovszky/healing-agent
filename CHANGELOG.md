@@ -5,11 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — releasing as 0.4.0
-This release ADDS functionality and removes nothing, so SemVer makes it a MINOR
-bump: `0.4.0`, not `0.3.2`. `pyproject.toml` already carries `0.4.0` so an
-in-development build reports the version it will ship as. No configuration key,
-import path or function signature was removed or changed.
+## [0.4.0] - 2026-08-24
+**Nothing breaks.** No configuration key, import path or function signature was
+removed or changed; every new setting is opt-in and defaults to the previous
+behavior. The version is a MINOR bump because the release adds functionality,
+which is what SemVer asks for even pre-1.0.
+
+The theme is evidence and trust: healing can now be *observed* without a
+failure (`capture()`, the log ring buffer), a failure it cannot repair is no
+longer lost (GitHub issue escalation), what a repair costs is measurable
+(sampling parameters, the usage ledger), and several ways the library could
+replace your application's own exception with its own are fixed.
 
 Note on milestone naming: the roadmap's "repairs that can be trusted" milestone
 was previously called "0.4". Milestone names and version numbers are now
@@ -17,6 +23,15 @@ separate — a version number follows from what a release contains, and that
 milestone spans several minor releases.
 
 ### Fixed
+- **The LiteLLM provider leaked its endpoint into the whole process.** It set
+  `litellm.api_base`, a module-level global, so a configured API base outlived
+  the call and applied to every later LiteLLM call — including calls made by
+  other code sharing the interpreter. It is now passed per request
+- The `openai` package is no longer imported at `ai_broker` import time. It is
+  needed only by the azure and openai providers, and an Ollama-only or
+  LiteLLM-only install should not fail on a package it never calls. The
+  connection-error handling that referenced `openai.APIConnectionError`
+  resolves it lazily and behaves exactly as before when openai is installed
 - **Hint prompts leaked the capture wrapper into the model's reading of
   arguments.** Captured arguments were interpolated as the raw structure
   `{'payload': {'value': ..., 'type': 'dict'}}`, and the model was observed
@@ -135,6 +150,15 @@ milestone spans several minor releases.
   produces exactly the request earlier releases sent. For Anthropic, `params`
   overrides the block-level `temperature` / `max_tokens` shorthands, so one
   config can be swept across settings without being rewritten
+- **Per-session model usage ledger** (`healing_agent/usage_ledger.py`). A
+  repair is several model calls — a hint, a fix, a retry — and until now
+  nothing could answer what one repair cost. Each call is recorded for the
+  duration of the healing session (provider, model, seconds, prompt and
+  completion tokens), the totals go into the saved fix artifact, and `DEBUG`
+  prints them. Deliberate limits: counts only, never prompt or completion
+  text, because the artifact is meant to be shareable; a provider that reports
+  no usage leaves `None` instead of a zero that would read as "free"; no
+  prices are baked in, since they change faster than releases
 - `AI_PROVIDER` in the shipped template now reads `HEALING_AGENT_PROVIDER`
   from the environment (default unchanged), so a benchmark sweep or a
   multi-provider setup can switch providers without editing the config file

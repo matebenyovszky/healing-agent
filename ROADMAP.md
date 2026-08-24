@@ -184,6 +184,12 @@ full specification in
    every escalated failure was a misspelled dependency, a missing test
    directory, or the healer being blocked from editing a test file — not one
    was an application code bug an LLM should have been asked about.
+   The provider-side half is specific and small: `handle_connection_errors`
+   retries once after a fixed two-second sleep and treats every network
+   failure alike. A rate limit (HTTP 429, with a `Retry-After` the provider
+   already sent), a timeout, a refused connection and a provider outage each
+   want a different response, and none of them wants a fixed sleep with no
+   jitter — several healing sessions failing together will retry in lockstep.
 12. **Modern provider layer** — small adapter protocol, structured repair
    output instead of Markdown parsing, scheduled compatibility matrix with
    published tested model IDs. Includes `healing-agent doctor`: check that a
@@ -194,6 +200,23 @@ full specification in
    user meets first, and today it is discovered in the middle of an actual
    incident. ([ghost](https://github.com/tripathiji1312/ghost) ships the same
    command for the same reason.)
+   Shipped from this item already: sampling parameters forwarded verbatim per
+   provider (`params`), `HEALING_AGENT_PROVIDER` for switching providers
+   without editing the config, and the per-session token ledger that makes a
+   cost column possible. Still open, in rough order of value:
+   - **structured output instead of Markdown parsing** — the fix path
+     currently strips code fences from free text and re-parses it; every
+     provider now offers a structured/tool-calling mode that removes the
+     failure class entirely. This also unblocks pulled evidence (ROADMAP
+     item 7), which needs tool calls to exist at all.
+   - **a published compatibility matrix** — model IDs are configurable and
+     none is hardcoded, which is right, but it leaves the user with no
+     recommendation at all. The matrix is an output of the benchmark
+     (item 13), including which models pass the anti-fabrication guards.
+   - **Azure `api_version` is pinned to `2024-02-01` in the template** — it
+     works, and it silently opts every new user out of everything Azure has
+     shipped since. It needs a documented, periodically revisited default
+     rather than a frozen constant nobody owns.
 13. **Honest benchmark** — small bug suites including adversarial cases where a
    patch passes weak tests but is semantically wrong; report repair rate,
    false-fix rate, attempts, latency, cost, and diff size. Publish the

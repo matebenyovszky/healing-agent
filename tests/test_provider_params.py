@@ -120,7 +120,8 @@ def test_ollama_params_are_nested_under_options(monkeypatch):
 
 def test_openai_forwards_params_as_request_kwargs(monkeypatch):
     captured = {}
-    monkeypatch.setattr(ai_broker.openai, "OpenAI", _fake_openai_client(captured))
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", _fake_openai_client(captured))
 
     ai_broker._get_openai_response(
         "prompt",
@@ -134,7 +135,8 @@ def test_openai_forwards_params_as_request_kwargs(monkeypatch):
 
 def test_openai_without_params_sends_no_sampling_arguments(monkeypatch):
     captured = {}
-    monkeypatch.setattr(ai_broker.openai, "OpenAI", _fake_openai_client(captured))
+    import openai
+    monkeypatch.setattr(openai, "OpenAI", _fake_openai_client(captured))
 
     ai_broker._get_openai_response("prompt", {"api_key": "k", "model": "m"}, "system")
 
@@ -143,7 +145,8 @@ def test_openai_without_params_sends_no_sampling_arguments(monkeypatch):
 
 def test_azure_forwards_params_as_request_kwargs(monkeypatch):
     captured = {}
-    monkeypatch.setattr(ai_broker.openai, "AzureOpenAI", _fake_openai_client(captured))
+    import openai
+    monkeypatch.setattr(openai, "AzureOpenAI", _fake_openai_client(captured))
 
     ai_broker._get_azure_response(
         "prompt",
