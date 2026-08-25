@@ -1,12 +1,18 @@
-# Healing Agent 🩺
+# Healing Agent
+
+Retry libraries re-run the same broken function. Healing Agent rewrites the decorated function, checks the candidate, and re-runs the repaired code.
+
+```bash
+pip install healing-agent
+```
+
+[Video demo](https://youtu.be/_N1G3qBO34s)
 
 Healing Agent is a deliberately small code-healing library: decorate a Python function, and when it raises, an AI analyzes the full context, generates a fix, backs up the original, applies the repair, and re-runs your code — like [Wolverine](https://github.com/biobootloader/wolverine), with regenerative healing abilities.
 
 **The thesis:** a thin, transparent, minimal codebase + a capable AI + strong acceptance tests can heal recurring IT failures — broken code *and* drifting data alike. Intelligence lives in the model and the prompts; trust lives in the tests.
 
 ⚠️ Not intended for production use. `AUTO_FIX` defaults to `True` to preserve the original autonomous behavior: a generated fix can modify, reload, and run supervised code. `AUTO_SYSCHANGE` defaults to `False` because it installs packages. Set `AUTO_FIX=False` for proposal-only operation. Failed healing always re-raises the original application exception.
-
-[Video demo on Youtube](https://youtu.be/_N1G3qBO34s)
 
 ## Features ✨
 
