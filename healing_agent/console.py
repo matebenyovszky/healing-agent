@@ -138,12 +138,17 @@ def emit(*args, sep: str = " ", end: str = "\n", level: int = logging.INFO) -> N
     except Exception:
         return
 
-    if _use_logging():
+    # Blank lines are console spacing, not events. A log record already carries
+    # its own separation from the formatter, so an empty record is pure noise in
+    # someone else's log.
+    if _use_logging() and message.strip():
         try:
             _logger.log(level, _strip_decoration(message))
             return
         except Exception:
             # Fall through to printing rather than losing the message.
             pass
+    elif _use_logging():
+        return
 
     _safe_print(message, end)

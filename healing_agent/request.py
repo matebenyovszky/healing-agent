@@ -41,9 +41,15 @@ class HealingRequested(Exception):
     def __init__(self, reason: str, details: Optional[Any] = None):
         self.reason = reason
         self.details = details
+        # `details` is deliberately NOT in the message. An exception message is
+        # captured as `error["message"]`, printed to the console and put in a
+        # GitHub issue title — none of which pass through the redaction that
+        # protects `details` itself, so embedding it here reintroduced verbatim
+        # caller data on every one of those paths. The details travel in the
+        # redacted `healing_request` block, where the model reads them.
         message = f"healing requested: {reason}"
         if details is not None:
-            message = f"{message} (details: {details})"
+            message = f"{message} (details attached)"
         super().__init__(message)
 
 

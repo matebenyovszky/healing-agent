@@ -29,9 +29,10 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Sequence
+from typing import Any, Dict, Iterable, List, Sequence, Optional
 
 from .code_replacer import function_replacer
+from .evidence import select
 from .console import emit
 
 
@@ -46,8 +47,21 @@ class VerifyGateConfigurationError(RuntimeError):
     """
 
 
-def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str, Any]) -> bool:
-    """Run configured verification gates before mutating the live file."""
+def verify_candidate(
+    context: Dict[str, Any],
+    fixed_code: str,
+    config: Dict[str, Any],
+    report: Optional[Dict[str, Any]] = None,
+) -> bool:
+    """Run configured verification gates before mutating the live file.
+
+    Args:
+        report: Optional dict the gate fills with ``reason`` when it
+            rejects. The verdict itself is the useful half of a rejection -
+            "a gate said no" tells a reader nothing, "expected 2000, got 0"
+            tells them where to look - so it is reported rather than
+            discarded.
+    """
     commands = _verify_commands(config.get("VERIFY_COMMAND"))
     if not commands:
         return True
@@ -71,19 +85,25 @@ def verify_candidate(context: Dict[str, Any], fixed_code: str, config: Dict[str,
             emit("♣ Verify gate could not apply candidate in isolated workspace.")
             return False
 
+        # A gate command is a fourth destination for the evidence, not an
+        # exception to the policy that governs the other three. It runs on the
+        # machine that already holds the artifacts, so it carries the `disk`
+        # selection — and an operator who trims `disk` now trims this too,
+        # instead of having the full context handed to a subprocess and to
+        # everything that subprocess starts.
         env = os.environ.copy()
         env["HEALING_AGENT_CANDIDATE"] = json.dumps(
             {
                 "protocol": "healing-agent-candidate-v1",
                 "source_file": str(candidate_path),
                 "original_file": str(source),
-                "context": candidate_context,
+                "context": select(candidate_context, config, "disk"),
             },
             default=str,
         )
 
         for command in commands:
-            if not _run_command_gate(command, working_dir, env, config):
+            if not _run_command_gate(command, working_dir, env, config, report):
                 return False
 
     return True
@@ -122,6 +142,7 @@ def _run_command_gate(
     workspace: Path,
     env: Dict[str, str],
     config: Dict[str, Any],
+    report: Optional[Dict[str, Any]] = None,
 ) -> bool:
     argv = _argv(command)
     if not argv:
@@ -139,6 +160,8 @@ def _run_command_gate(
         )
     except subprocess.TimeoutExpired:
         emit(f"♣ Verify gate timed out: {argv[0]}")
+        if report is not None:
+            report["reason"] = f"{argv[0]} timed out"
         return False
     except OSError as exc:
         raise VerifyGateConfigurationError(
@@ -154,7 +177,10 @@ def _run_command_gate(
         return True
 
     message = detail.get("error") if detail else (result.stderr or result.stdout).strip()
-    emit(f"♣ Verify gate rejected candidate: {message or 'command failed'}")
+    message = message or "command failed"
+    emit(f"♣ Verify gate rejected candidate: {message}")
+    if report is not None:
+        report["reason"] = f"{argv[0]} exited {result.returncode}: {message}"
     return False
 
 

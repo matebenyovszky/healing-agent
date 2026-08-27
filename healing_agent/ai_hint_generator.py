@@ -1,17 +1,24 @@
 from typing import Dict, Any
 from .ai_broker import get_ai_response
+from .evidence import select
 
 def generate_hint(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     """
     Generate an AI-powered hint based on the exception context.
-    
+
     Args:
         context (Dict[str, Any]): The exception context
         config (Dict[str, Any]): The configuration dictionary
-        
+
     Returns:
         str: The generated AI hint
     """
+    # This is a provider call like any other, and the first of the two a repair
+    # makes, so the same policy applies. Without it an operator who said "do not
+    # send my logs" still sent them here, and arguments went out at the capture
+    # limit rather than the provider limit.
+    context = select(context, config, 'provider')
+
     # Extract error information
     error = context['error']
     error_type = error['type']
@@ -52,6 +59,21 @@ def generate_hint(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     python_version = context.get('python_version', '')
     platform = context.get('platform', '')
 
+    # A deliberate request carries intent an exception does not. The analysis
+    # has to know it: this hint is fed to the fix prompt as "AI Analysis", so a
+    # hint written without the stated reason makes the repair reason about a
+    # crash that never happened.
+    healing_request = ""
+    if context.get('healing_request'):
+        request = context['healing_request']
+        healing_request = (
+            "\nThe program did not crash: it detected the problem itself and "
+            "explicitly requested a repair.\n"
+            f"Stated reason: {request.get('reason')}\n"
+        )
+        if request.get('details') is not None:
+            healing_request += f"Supporting details: {request.get('details')}\n"
+
     # What the application was doing before it broke (only when log capture
     # is armed; see healing_agent.enable_log_capture).
     recent_logs = ""
@@ -90,7 +112,7 @@ Detailed Traceback Frames:
 
 Additional Error Details:
 {error_details}
-{recent_logs}
+{healing_request}{recent_logs}
 
 Based on all the provided context, generate a helpful hint or suggestion for resolving the issue. Consider:
 1. The exact error type and message

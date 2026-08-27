@@ -100,3 +100,58 @@ def test_invalid_local_max_attempts_preserves_application_error(monkeypatch):
         broken()
 
     assert isinstance(caught.value.__cause__, ValueError)
+
+
+def test_a_same_length_candidate_is_not_served_from_stale_bytecode(tmp_path, monkeypatch):
+    """A repaired module must run the repaired source, not a cached .pyc.
+
+    Python treats a cached .pyc as valid when the source's mtime AND size match
+    what it recorded - and mtime is stored with SECOND resolution. A candidate
+    that happens to be the same byte length as the code it replaces, written
+    within the same second, therefore reloaded the ORIGINAL bytecode: the file
+    on disk was repaired while the process kept running the old code, which is
+    indistinguishable from the repair silently not working.
+
+    The candidate below is byte-for-byte the same length as what it replaces,
+    which is how this was found - "missing" and "try_one" are both seven
+    characters.
+    """
+    import importlib.util
+    import sys
+
+    original = (
+        'import healing_agent\n'
+        '\n'
+        '@healing_agent\n'
+        'def pick(v):\n'
+        '    return v["aaaaaaa"]\n'
+    )
+    candidate = 'def pick(v):\n    return "healedxxxx"\n'
+
+    path = tmp_path / "stale_reload.py"
+    path.write_text(original, encoding="utf-8")
+    size_before = path.stat().st_size
+
+    monkeypatch.setattr(healing_module, "load_config", lambda: (_config(max_attempts=1), None))
+    monkeypatch.setattr(healing_module, "generate_hint", lambda *_a, **_k: "hint")
+    monkeypatch.setattr(healing_module, "fix", lambda *_a, **_k: candidate)
+
+    # The initial import writes the bytecode cache for the ORIGINAL source.
+    spec = importlib.util.spec_from_file_location("stale_reload", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["stale_reload"] = module
+    spec.loader.exec_module(module)
+
+    try:
+        result = module.pick({})
+    finally:
+        sys.modules.pop("stale_reload", None)
+
+    assert path.stat().st_size == size_before, (
+        "the candidate must be the same size as the original for this test to "
+        "exercise the cache at all"
+    )
+    assert result == "healedxxxx", (
+        "the reload served stale bytecode: the file was repaired but the "
+        "original code ran"
+    )

@@ -7,6 +7,12 @@ The same failure context travels to three places with very different economics:
     provider   a prompt, paid for by the token, on every nested repair attempt
     issue      a GitHub body with a hard size limit, read by a human
 
+A verification gate is a fourth reader, and it carries the `disk` selection: it
+runs on the machine that already holds the artifacts, so it is the same trust
+boundary rather than a separate one. It is named here because "governed by the
+policy" has to be true of every destination — an exception is how evidence
+leaks.
+
 Redaction is NOT what varies here. One policy applies before anything leaves
 the capture, so the evidence is equally safe in all three; a sink chooses how
 much of it is worth carrying, not how safe it is.
@@ -80,18 +86,22 @@ def wanted_anywhere(config: Optional[Dict[str, Any]], section: str) -> bool:
     return any(policy(config, sink).get(section, 0) > 0 for sink in DEFAULT_EVIDENCE)
 
 
-def _trim_value(value: Any, limit: int, depth: int = 0) -> Any:
-    """Trim every string to ``limit``, entry by entry rather than in bulk."""
+def trim_value(value: Any, limit: int, depth: int = 0) -> Any:
+    """Trim every string to ``limit``, entry by entry rather than in bulk.
+
+    Public because the saved artifact needs it too: one implementation of
+    "how evidence shrinks" rather than a copy per caller.
+    """
     if depth > 25:
         return value
     if isinstance(value, str):
         return value if len(value) <= limit else value[:limit] + " …"
     if isinstance(value, dict):
-        return {k: _trim_value(v, limit, depth + 1) for k, v in value.items()}
+        return {k: trim_value(v, limit, depth + 1) for k, v in value.items()}
     if isinstance(value, list):
-        return [_trim_value(v, limit, depth + 1) for v in value]
+        return [trim_value(v, limit, depth + 1) for v in value]
     if isinstance(value, tuple):
-        return tuple(_trim_value(v, limit, depth + 1) for v in value)
+        return tuple(trim_value(v, limit, depth + 1) for v in value)
     return value
 
 
@@ -121,6 +131,6 @@ def select(
             records = list(value or [])
             selected[key] = records[-limit:]
         else:
-            selected[key] = _trim_value(value, limit)
+            selected[key] = trim_value(value, limit)
 
     return selected

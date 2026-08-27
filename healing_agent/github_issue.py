@@ -184,6 +184,14 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
     if hint:
         lines += ["", "### Analysis", "", str(hint)]
 
+    # What was tried and why each attempt failed. This is the half that makes
+    # the issue agent INPUT rather than a notice: without it a reader sees a
+    # candidate with no sign that it was rejected, and would take a known-bad
+    # direction for the repair.
+    from .attempt_ledger import render as render_attempts
+
+    lines += render_attempts(context.get("attempts"))
+
     if detail in {"redacted", "ai-anonymized"}:
         # Trim on the way out: the artifact on disk stays rich, the issue body
         # has a hard GitHub limit and a human has to read it.

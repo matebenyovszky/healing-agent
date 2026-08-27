@@ -39,6 +39,12 @@ def prepare_fix_prompt(context: Dict[str, Any], config: Dict[str, Any] = None) -
     Returns:
         str: Formatted prompt for the AI
     """
+    # What this sink carries, and how much of it, is policy: see evidence.py.
+    # It has to run BEFORE anything reads from the context — the arguments used
+    # to be rendered above this line, so they travelled at the capture limit
+    # whatever the policy said, and `arguments: 0` did not remove them at all.
+    context = select(context, config, 'provider')
+
     # Extract function info if available
     function_info = context.get('function_info', {})
     function_args = context.get('function_arguments', {})
@@ -79,9 +85,6 @@ Module: {function_info.get('module')}
     ai_hint = ""
     if context.get('ai_hint'):
         ai_hint = f"\nAI Analysis:\n{context['ai_hint']}"
-
-    # What this sink carries, and how much of it, is policy: see evidence.py.
-    context = select(context, config, 'provider')
 
     state_info = ""
     variables = (context.get('variables') or {}).get('locals') or {}

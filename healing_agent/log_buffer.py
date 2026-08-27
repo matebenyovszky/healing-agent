@@ -18,9 +18,12 @@ be armed while the program is still healthy:
     healing_agent.enable_log_capture()        # size from LOG_BUFFER_SIZE
     healing_agent.enable_log_capture(50)      # or explicitly
 
-⚠ Log messages are free text. Name-based redaction cannot see inside them, so
-`logger.info(f"token={t}")` WILL reach the provider. Enable this only for
-loggers whose messages you trust, and prefer a higher `LOG_BUFFER_LEVEL`.
+⚠ Log messages are free text, so the name-based redaction that protects the
+rest of the context has no field name to judge. Buffered lines are therefore
+value-scrubbed on the way out (`redactor.scrub_value`), which masks URL
+credentials and recognisable token shapes — but that is a denylist, and a
+bespoke secret format will pass. Enable this only for loggers whose messages
+you trust, and prefer a higher `LOG_BUFFER_LEVEL`.
 """
 
 import logging
@@ -28,6 +31,7 @@ from collections import deque
 from typing import Any, Dict, List, Optional
 
 from .console import LOGGER_NAME, emit
+from .redactor import DEFAULT_PLACEHOLDER, scrub_value
 
 # Keep single records from dominating the prompt.
 MAX_RECORD_CHARS = 300
@@ -129,12 +133,22 @@ def recent_records(config: Optional[Dict[str, Any]] = None) -> Optional[List[str
 
     The configured size is honored even if the buffer was armed with a larger
     one, so lowering `LOG_BUFFER_SIZE` immediately lowers what is sent.
+
+    Value scrubbing is applied here rather than left to the name-based
+    redaction that covers the rest of the context. A log line is free text with
+    no field name to judge — `logger.info(f"token={t}")` is ordinary code — so
+    the only filter that can see into it is the one that recognises the shape
+    of a secret. This is the single place both the healing path and `capture()`
+    read the buffer, so scrubbing here covers both.
     """
     if _handler is None:
         return None
     records = list(_handler.records)
     if not records:
         return None
+    placeholder = (config or {}).get("REDACT_PLACEHOLDER") or DEFAULT_PLACEHOLDER
+    if (config or {}).get("REDACT_SECRETS", True) is not False:
+        records = [scrub_value(line, placeholder) for line in records]
     if config:
         try:
             limit = int(config.get("LOG_BUFFER_SIZE", 0) or 0)

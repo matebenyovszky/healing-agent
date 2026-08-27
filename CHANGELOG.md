@@ -10,7 +10,96 @@ Adds functionality, removes nothing: a MINOR bump. `CONFIG_SCHEMA_VERSION` also
 moves to `0.5.0` because `LOG_MODE` is a new configuration key; a config file
 predating it keeps working and is completed from the template on load.
 
+### Fixed
+- **A repaired module could run stale bytecode, so a correct repair looked like
+  a silent failure.** The reload used `spec.loader.exec_module`, and Python
+  treats a cached `.pyc` as valid when the source's mtime AND size match what
+  it recorded — with mtime stored at SECOND resolution. A candidate that
+  happens to be the same byte length as the code it replaces, written within
+  the same second, therefore reloaded the ORIGINAL bytecode: the file on disk
+  was repaired while the process kept running the old code. Nothing reported
+  anything wrong; the original exception simply came back. The reload now
+  compiles the source directly, because the one thing we know at that point is
+  that the file just changed. Found while building the attempt ledger, where
+  two candidates differing only in a seven-character key (`"missing"` vs
+  `"try_one"`) produced byte-identical files
+- **The redaction chokepoint could be walked around, and two sections walked
+  around it.** `redact()` ran immediately after capture, but two sections were
+  attached to the context AFTER it: `healing_request["details"]`, which is
+  arbitrary caller data (the README's own example passes a row of business
+  data), and the buffered application log records. Both travelled verbatim to
+  the provider, to the saved artifact and into an escalated GitHub issue —
+  which now defaults to attaching the redacted context. `capture()` had the
+  order right, so the two paths disagreed. Three changes close it:
+  - `redact()` now runs last, once everything the application supplied is in
+    the context. Nothing captured may be added after that line
+  - log records are value-scrubbed where the buffer is read, because
+    name-based redaction has no field name to judge in free text —
+    `logger.info(f"token={t}")` is ordinary code. This covers both the healing
+    path and `capture()`, since both read the buffer through one function.
+    It remains a denylist: a bespoke secret format still passes
+  - `HealingRequested` no longer embeds `details` in its exception message.
+    That message is captured as `error["message"]`, printed to the console and
+    used in an issue title, none of which the redaction of `details` reaches.
+    The same data was also captured a second time as an exception ATTRIBUTE,
+    where it had already been flattened to a string and had no field names
+    left to match; that duplicate is gone. One copy, the one that can be
+    redacted
+- **`EVIDENCE` did not govern two of the places evidence goes.** A policy with
+  exceptions is not a policy:
+  - the hint call — the FIRST of the two provider calls every repair makes —
+    never applied it, so an operator who said "do not send my logs" still sent
+    them, and arguments went out at the capture limit rather than the provider
+    limit
+  - the fix call applied it, but only after it had already rendered the
+    arguments, so `EVIDENCE["provider"]["arguments"]` had no effect there
+    either. The selection now runs before anything reads from the context
+  - a verification gate handed the whole context to a subprocess through
+    `HEALING_AGENT_CANDIDATE`, and to everything that subprocess starts. It
+    carries the `disk` selection now — the gate runs on the machine that
+    already holds the artifacts, so it is the same trust boundary, but it is
+    no longer outside the policy
+- The stated reason of a `request_healing()` call now reaches the hint prompt.
+  The hint is fed to the fix prompt as "AI Analysis", so an analysis written
+  without knowing the program asked deliberately — and why — made the repair
+  reason about a crash that never happened
+- A blank console separator no longer produces an empty log record.
+  Blank lines are console spacing; a log record already carries its own
+  separation from the application's formatter
+
+### Changed
+- One trimming implementation instead of two: `evidence.trim_value()` is public
+  and `exception_handler.trim_values()` — dead since the evidence policy landed,
+  and imported privately across modules — is removed
+- `GitPatchArtifact.verified` documents what it means: `git apply --check`
+  succeeded, not that the repair is correct or that a `VERIFY_COMMAND` gate
+  accepted it. The patch is written before any gate runs so that proposal-only
+  operation (`AUTO_FIX = False`, where no gate runs at all) still produces its
+  one deliverable
+
 ### Added
+- **An escalated issue now says what was tried and why each attempt failed.**
+  It used to show a single candidate with no indication that it had been
+  REJECTED, no reason, and no trace of the attempts after the first — so a
+  reader, human or issue→PR agent, would take a known-bad direction for the
+  repair. `attempt_ledger` records one entry per attempt: the candidate, the
+  outcome, and the detail that explains the verdict (`no candidate generated`,
+  `rejected by a verify gate`, `applied, but the function still failed`,
+  `accepted`). A verify gate now reports WHY it rejected, so "pytest exited 1:
+  expected 2000, got 0" reaches the issue instead of "a gate said no".
+  Two properties took care to get right:
+  - **the candidate's own error is not visible where the attempt ends.** An
+    applied candidate that fails again does not surface its error upstream: the
+    nested session re-raises the ORIGINAL exception, which is this project's
+    central guarantee. Recording what propagates there put the header's error
+    into every entry and implied each candidate had reproduced the original
+    failure. Entries are therefore opened before the call and closed from the
+    nested session, which is the only place the truth exists
+  - **completion order is not attempt order.** Attempts nest, so attempt 2
+    records before attempt 1 finishes; rendered as recorded the ledger read
+    backwards and inverted the one thing it conveys
+  The same record is what a pull request body and incident memory will need,
+  which is why it exists before either
 - **Methods are healed, not just module-level functions.** A repair was located
   by the function's bare NAME among the TOP-LEVEL definitions only, so a method
   was never found: healing aborted and the original exception was re-raised,

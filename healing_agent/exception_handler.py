@@ -10,6 +10,7 @@ from typing import Optional, Any, Dict, Callable
 import requests
 
 from .code_replacer import find_function_node
+from .request import HealingRequested
 from .redactor import (
     DEFAULT_PLACEHOLDER,
     get_sensitive_matcher,
@@ -76,25 +77,6 @@ def _value_limit(config: Optional[dict] = None) -> int:
     except (TypeError, ValueError):
         return DEFAULT_VALUE_CHARS
     return limit if limit > 0 else DEFAULT_VALUE_CHARS
-
-
-def trim_values(obj: Any, limit: int, _depth: int = 0) -> Any:
-    """Return a copy of ``obj`` with every string trimmed to ``limit``.
-
-    Used on the way out, so the same captured context can be rich on disk and
-    affordable in a prompt without capturing it twice.
-    """
-    if _depth > 25:
-        return obj
-    if isinstance(obj, str):
-        return obj if len(obj) <= limit else obj[:limit] + " …"
-    if isinstance(obj, dict):
-        return {key: trim_values(value, limit, _depth + 1) for key, value in obj.items()}
-    if isinstance(obj, list):
-        return [trim_values(value, limit, _depth + 1) for value in obj]
-    if isinstance(obj, tuple):
-        return tuple(trim_values(value, limit, _depth + 1) for value in obj)
-    return obj
 
 
 #: Environment variables captured when the configuration does not name any.
@@ -307,8 +289,20 @@ def capture_context(
             'attributes': {}
         }
         
-        # Collect error attributes safely
+        # Collect error attributes safely.
+        #
+        # A HealingRequested carries `reason` and `details` as attributes, and
+        # `details` is arbitrary caller data. It is already carried by the
+        # dedicated `healing_request` section, where redaction can see its field
+        # names — here it would be flattened to a string first, and a stringified
+        # dict has no keys left to match, so the copy would travel verbatim.
+        # One copy, the one that can be redacted.
+        carried_elsewhere = (
+            {'reason', 'details'} if isinstance(error, HealingRequested) else set()
+        )
         for attr in dir(error):
+            if attr in carried_elsewhere:
+                continue
             if not attr.startswith('_'):
                 try:
                     value = getattr(error, attr)

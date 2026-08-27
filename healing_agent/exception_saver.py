@@ -42,9 +42,9 @@ def save_context(context: dict, config: Optional[dict] = None) -> Optional[str]:
             saved = select(context, config, 'disk')
             payload = json.dumps(saved, indent=2, ensure_ascii=False, default=str)
             if len(payload.encode('utf-8')) > MAX_ARTIFACT_BYTES:
-                from .evidence import _trim_value
+                from .evidence import trim_value
 
-                trimmed = _trim_value(saved, 1000)
+                trimmed = trim_value(saved, 1000)
                 trimmed['artifact_note'] = (
                     f'values trimmed: the full context exceeded '
                     f'{MAX_ARTIFACT_BYTES} bytes'

@@ -76,6 +76,11 @@ class GitPatchArtifact:
     relative_path: str
     original_sha256: str
     candidate_sha256: str
+    #: `git apply --check` succeeded — the patch APPLIES cleanly. It says
+    #: nothing about whether the repair is correct or whether a configured
+    #: VERIFY_COMMAND gate accepted it: the patch is written before any gate
+    #: runs, so that proposal-only operation (`AUTO_FIX = False`, where no gate
+    #: runs at all) still produces its one deliverable.
     verified: bool
 
 

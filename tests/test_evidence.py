@@ -132,7 +132,7 @@ def test_disk_carries_more_than_the_prompt_does():
 
 
 def test_trim_shortens_strings_at_every_depth():
-    trimmed = evidence._trim_value(
+    trimmed = evidence.trim_value(
         {"a": "x" * 100, "b": {"c": ["y" * 100]}, "n": 5}, 10
     )
     assert trimmed["a"].startswith("x" * 10) and len(trimmed["a"]) < 20
