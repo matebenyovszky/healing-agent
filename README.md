@@ -327,7 +327,9 @@ Why this matters in practice — measured on a real captured context, changing o
 | `{"environment": 0}` | ~1600 tokens |
 | `{"environment": 0, "variables": 100, "logs": 10}` | ~1270 tokens |
 
-The environment is the expensive section and the least useful *to the model* — it is mostly `PATH` and ninety other variables. It is invaluable to a **human** reading an escalated issue, though, which is exactly why the destinations are configured separately.
+The environment is the expensive section and the least useful *to the model*, while being invaluable to a **human** reading an escalated issue — which is exactly why the destinations are configured separately.
+
+**Environment capture is an allowlist.** `ENVIRONMENT_VARS` names the variables you want; nothing else is read. A denylist can only mask the secret shapes it already knows, so a bespoke secret under a harmless name would travel — naming what you want inverts that. The name and value filters still run on top, so an allowlisted `DATABASE_URL` keeps its host and path while its password is masked.
 
 ## When healing fails: escalate to GitHub 🎫
 
@@ -375,6 +377,9 @@ BACKUP_ENABLED = True     # Back up sources before fixes
 RESTORE_ON_FAILURE = True # Roll the source back when healing definitively fails
 SAVE_EXCEPTIONS = True    # Save exception context JSON
 REDACT_SECRETS = True     # Redact secrets before AI/disk (keep True)
+
+# Which environment variables to capture — an allowlist, not a filter
+ENVIRONMENT_VARS = ["APP_ENV", "TZ", "CI"]
 
 # Evidence: what each destination carries, and how much (see below)
 EVIDENCE = {

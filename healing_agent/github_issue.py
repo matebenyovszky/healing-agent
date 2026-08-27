@@ -158,8 +158,10 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
     )
 
     lines = [
-        "Automatic healing did not produce a working repair, so this failure "
-        "is escalated for review.",
+        (
+            "Automatic healing did not produce a working repair, so this "
+            "failure is escalated for review."
+        ),
         "",
         f"- **Error:** `{error.get('type')}: {error.get('message')}`",
         f"- **Function:** `{function_name}`",
@@ -168,8 +170,10 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
         f"- **Detected:** {context.get('timestamp', datetime.datetime.now().isoformat())}",
         f"- **Detail level:** `{detail}`",
         "",
-        "The full exception context, captured variables and the generated "
-        "candidate fixes stay on the machine that ran the job:",
+        (
+            "The full exception context, captured variables and the generated "
+            "candidate fixes stay on the machine that ran the job:"
+        ),
         "",
         "- exception context: `_healing_agent_exceptions/`",
         "- generated candidates: `_healing_agent_fixes/`",

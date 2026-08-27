@@ -56,19 +56,44 @@ def test_ordinary_values_survive_untouched(value):
 
 # --- environment capture -----------------------------------------------------
 
-def test_environment_keeps_names_but_masks_secrets(monkeypatch):
+def test_only_the_listed_variables_are_captured(monkeypatch):
+    """An allowlist, not a filter: this is the security boundary.
+
+    A denylist can only mask the secret shapes it already knows, so a bespoke
+    secret under a harmless name would travel. Naming what you want inverts
+    that — it is not captured because it was never asked for.
+    """
+    monkeypatch.setenv("EV_REGION", "eu-central-1")
+    monkeypatch.setenv("EV_BESPOKE_SECRET", "shape-nobody-can-recognise")
+
+    environment = handler.capture_environment({"ENVIRONMENT_VARS": ["EV_REGION"]})
+
+    assert environment == {"EV_REGION": "eu-central-1"}
+    assert "EV_BESPOKE_SECRET" not in environment
+
+
+def test_listed_variables_are_still_filtered(monkeypatch):
+    """Defence in depth: asking for a variable is not asking for its secret."""
     monkeypatch.setenv("EV_DB_URL", "postgres://app:S3cr3t@db/prod")
     monkeypatch.setenv("EV_API_KEY", "totally-secret")
-    monkeypatch.setenv("EV_REGION", "eu-central-1")
 
-    environment = handler.capture_environment({})
+    environment = handler.capture_environment(
+        {"ENVIRONMENT_VARS": ["EV_DB_URL", "EV_API_KEY"]}
+    )
 
-    # Names are diagnostic in themselves — that a credential is SET matters.
-    assert "EV_API_KEY" in environment
     assert environment["EV_API_KEY"] == redactor.DEFAULT_PLACEHOLDER
     assert "S3cr3t" not in environment["EV_DB_URL"]
     assert "db/prod" in environment["EV_DB_URL"], "over-redacted the host"
-    assert environment["EV_REGION"] == "eu-central-1"
+
+
+def test_an_empty_list_captures_nothing(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    assert handler.capture_environment({"ENVIRONMENT_VARS": []}) == {}
+
+
+def test_absent_variables_are_simply_missing(monkeypatch):
+    monkeypatch.delenv("EV_NOT_SET", raising=False)
+    assert handler.capture_environment({"ENVIRONMENT_VARS": ["EV_NOT_SET"]}) == {}
 
 
 def test_environment_is_not_captured_when_no_sink_carries_it():
@@ -80,9 +105,20 @@ def test_environment_is_not_captured_when_no_sink_carries_it():
     assert "environment" not in context
 
 
-def test_environment_is_present_by_default():
+def test_the_default_allowlist_is_used_when_none_is_configured(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
     context = handler.capture_context(config={})
-    assert context["environment"], "environment missing from a default capture"
+    assert context["environment"]["APP_ENV"] == "production"
+
+
+def test_the_default_allowlist_is_small_and_obviously_non_secret():
+    """A default that captured broadly would be a denylist by another name."""
+    names = handler.DEFAULT_ENVIRONMENT_VARS
+    assert len(names) < 20
+    for name in names:
+        assert not redactor.is_sensitive_name(
+            name, redactor.get_sensitive_matcher()
+        ), f"{name} should not be captured by default"
 
 
 # --- size policy: rich on disk, affordable on the way out --------------------

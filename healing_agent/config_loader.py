@@ -258,6 +258,19 @@ def validate_config(config):
             if optional_bool in config and not isinstance(config[optional_bool], bool):
                 raise ValueError(f"{optional_bool} must be a boolean value")
 
+        environment_vars = config.get('ENVIRONMENT_VARS')
+        if environment_vars is not None:
+            if isinstance(environment_vars, (str, bytes)) or not isinstance(
+                environment_vars, (list, tuple)
+            ):
+                raise ValueError(
+                    "ENVIRONMENT_VARS must be a list of variable names"
+                )
+            for name in environment_vars:
+                if not isinstance(name, str):
+                    raise ValueError(
+                        f"ENVIRONMENT_VARS entries must be strings, got {name!r}"
+                    )
         capture_chars = config.get('CAPTURE_VALUE_CHARS')
         if capture_chars is not None and (
             isinstance(capture_chars, bool)

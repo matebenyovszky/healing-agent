@@ -37,17 +37,15 @@ Return only the fixed JSON data without any explanations or markdown formatting.
         return None
 
 def fix_json_lint(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
+    """Unimplemented: no JSON linter is wired up yet.
+
+    Kept as the named seam for a deterministic JSON repair that would run
+    before the AI-based fallback. It used to read the payload into a variable
+    it never used and swallow any error doing so, which looked like a working
+    linter that always declined.
     """
-    Attempt to fix JSON data using a JSON linter.
-    """
-    try:
-        # Unimplemented stub: reading the payload is all it does today. A real
-        # implementation would run a JSON linter over it and return the repaired
-        # text; until then the caller falls through to the AI-based fixer.
-        _json_data = context['error']['json_details']['response_text']
-    except Exception as e:
-        emit(f"♣ JSON linting failed: {str(e)}", level=logging.ERROR)
-        return None
+    return None
+
 
 def fix_json_fallback(context: Dict[str, Any], config: Dict[str, Any]) -> Any:
     """

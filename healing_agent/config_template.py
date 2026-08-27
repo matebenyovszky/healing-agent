@@ -201,6 +201,18 @@ EVIDENCE = {
     # A GitHub body with a hard size limit, read by a human.
     "issue":    {"arguments": 300,  "variables": 300,  "environment": 300,  "logs": 50},
 }
+# Which environment variables to capture. An ALLOWLIST, not a filter: the
+# environment is the most secret-dense structure in a process, and a denylist
+# can only mask the secret shapes it already knows, so a bespoke secret under a
+# harmless name would travel. Naming what you want inverts that. The name and
+# value filters still run on top, so an allowlisted DATABASE_URL keeps its host
+# and path while its password is masked. Empty list = capture nothing.
+ENVIRONMENT_VARS = [
+    "APP_ENV", "ENVIRONMENT", "DEPLOY_ENV", "STAGE",   # which deployment
+    "TZ", "LANG", "LC_ALL",                            # which locale
+    "CI", "RUNNER_OS", "CONTAINER", "KUBERNETES_SERVICE_HOST",  # where it ran
+]
+
 # Per-value ceiling applied at CAPTURE time, before any sink sees the context.
 # It bounds what the process holds in memory; a sink trims further from there.
 CAPTURE_VALUE_CHARS = 3000

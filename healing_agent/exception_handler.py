@@ -97,31 +97,58 @@ def trim_values(obj: Any, limit: int, _depth: int = 0) -> Any:
     return obj
 
 
+#: Environment variables captured when the configuration does not name any.
+#: Deliberately tiny and obviously non-secret: which deployment, which locale,
+#: whether this is CI or a container. Add your own with ENVIRONMENT_VARS.
+DEFAULT_ENVIRONMENT_VARS = (
+    "APP_ENV",
+    "ENVIRONMENT",
+    "DEPLOY_ENV",
+    "STAGE",
+    "TZ",
+    "LANG",
+    "LC_ALL",
+    "CI",
+    "RUNNER_OS",
+    "CONTAINER",
+    "KUBERNETES_SERVICE_HOST",
+)
+
+
 def capture_environment(config: Optional[dict] = None) -> Dict[str, Any]:
-    """Capture the process environment, redacted by name AND by value.
+    """Capture the environment variables the configuration asks for.
 
-    Which environment a failure happened in is often the whole diagnosis: a
-    different deployment, a different locale, a feature flag that is set here
-    and not there. It is also the most secret-dense structure in a process, so
-    two filters apply rather than one — the usual name matching, plus value
-    scrubbing for the secrets that hide under harmless names (`DATABASE_URL`
-    carries a password inside a URL, `SENTRY_DSN` embeds a key).
+    An ALLOWLIST, not a filter. Which environment a failure happened in is
+    often the whole diagnosis — a different deployment, a different locale, a
+    feature flag set here and not there — but the environment is also the most
+    secret-dense structure in a process, and a denylist can only mask the
+    secret shapes it already knows. Naming the variables you want inverts that:
+    an unrecognised custom secret is not captured because it was never asked
+    for.
 
-    Every NAME is kept even when its value is masked: knowing that
-    `AWS_SECRET_ACCESS_KEY` is set, or that a feature flag exists at all, is
-    itself diagnostic.
+    The name and value filters still run on top, as defence in depth: an
+    allowlisted `DATABASE_URL` keeps its host and path while its password is
+    masked.
     """
+    config = config or {}
+    names = config.get("ENVIRONMENT_VARS", DEFAULT_ENVIRONMENT_VARS)
+    if not names:
+        return {}
+
     matcher = get_sensitive_matcher(config)
-    placeholder = (config or {}).get("REDACT_PLACEHOLDER") or DEFAULT_PLACEHOLDER
+    placeholder = config.get("REDACT_PLACEHOLDER") or DEFAULT_PLACEHOLDER
     limit = _value_limit(config)
 
     environment = {}
-    for name, value in os.environ.items():
+    for name in names:
+        name = str(name)
+        if name not in os.environ:
+            continue
         if is_sensitive_name(name, matcher):
             environment[name] = placeholder
             continue
         try:
-            scrubbed = scrub_value(value, placeholder)
+            scrubbed = scrub_value(os.environ[name], placeholder)
         except Exception:
             scrubbed = placeholder
         environment[name] = scrubbed[:limit] if isinstance(scrubbed, str) else scrubbed
@@ -150,15 +177,9 @@ def capture_context(
         dict: The captured context
     """
 
-    # Reset/initialize important variables
-    exc_type = None
-    exc_value = None
-    exc_traceback = None
-    trace = None
-    error_frame = None
-    context = dict()  # Explicitly reset context to empty dictionary
-
-    # Capture enhanced context
+    # Every name below is local to this call, so there is nothing to reset:
+    # the block that used to "reset" them assigned `context` twice in a row and
+    # pre-bound names that only the `if error:` branch uses.
     context = {
         'timestamp': datetime.datetime.now().isoformat(),
         'python_version': sys.version,

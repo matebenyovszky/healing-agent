@@ -246,7 +246,7 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
                 "♣ Generated fix failed validation"
                 + (", retrying once" if generation_attempt == 0 else "")
             )
-        return
+        return None
 
     except Exception as e:
         emit(f"♣ Error during code fixing: {str(e)}", level=logging.ERROR)
@@ -255,4 +255,4 @@ def fix(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         emit("♣ Error traceback:")
         import traceback
         traceback.print_exc()
-        return
+        return None
