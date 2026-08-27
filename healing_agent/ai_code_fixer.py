@@ -103,8 +103,9 @@ Module: {function_info.get('module')}
             f"- {name}={value}" for name, value in sorted(environment.items())
         ]
         environment_info = (
-            "\nEnvironment (secrets masked; names kept because their presence "
-            "is itself diagnostic):\n" + "\n".join(rendered) + "\n"
+            "\nEnvironment (an allowlist of variables, secrets masked):\n"
+            + "\n".join(rendered)
+            + "\n"
         )
 
     # A deliberate request carries intent, which an exception does not: the

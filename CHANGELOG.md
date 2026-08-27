@@ -43,15 +43,21 @@ predating it keeps working and is completed from the template on load.
   saved but never sent, and an issue carried only pointers to files on the
   machine that failed. The package is now the same everywhere; only its SIZE
   differs by destination.
-  - `environment`: every variable NAME is kept, because knowing that a
-    credential is set, or that a feature flag exists, is itself diagnostic.
-    Values pass two filters, not one — the usual name matching, plus **value
-    scrubbing** for the secrets that hide under harmless names. Name matching
-    alone leaked 4 of 7 realistic samples: `DATABASE_URL` carries a password
-    inside a URL, `SENTRY_DSN` embeds a key, a licence variable holds a JWT.
-    URL credentials, GitHub/OpenAI/Stripe/Slack/AWS/Google token shapes, JWTs
-    and PEM headers are masked; scheme, host and path survive so the value
-    stays diagnostic. Switch off with `CAPTURE_ENVIRONMENT = False`
+  - `environment`: an **allowlist**, `ENVIRONMENT_VARS`. Which environment a
+    failure happened in is often the whole diagnosis — a different deployment,
+    a different locale, a feature flag set here and not there — but the
+    environment is also the most secret-dense structure in a process. A
+    denylist can only mask the secret shapes it already knows, and a bespoke
+    secret under a harmless name would travel; naming the variables you want
+    inverts that. The default list is deliberately tiny and obviously
+    non-secret (deployment, locale, CI/container markers), and an empty list
+    captures nothing.
+    The name and value filters still run on top, as defence in depth rather
+    than as the boundary: an allowlisted `DATABASE_URL` keeps its host and
+    path while its password is masked. `redactor.scrub_value()` masks URL
+    credentials — including a lone userinfo, which in a configuration value is
+    far more often a key than a username — and GitHub, OpenAI, Stripe, Slack,
+    AWS and Google token shapes, JWTs and PEM headers
   - Local variables and the environment now reach the fix prompt
   - `GITHUB["issue_detail"]` defaults to `redacted`, so an escalated issue
     carries the evidence an agent or a human needs instead of paths on a
@@ -72,9 +78,9 @@ predating it keeps working and is completed from the template on load.
     3 MB in total — trimmed, never dropped, if it would exceed that
 
   **Behavior change:** repairs cost more tokens, and an escalated issue now
-  contains captured values. Both were previously impossible to enable. Set
-  `CAPTURE_ENVIRONMENT = False` and `issue_detail = "reference"` for the old
-  behavior.
+  contains captured values. Both were previously impossible to enable. For the
+  old behavior set `ENVIRONMENT_VARS = []`, `issue_detail = "reference"`, and
+  `EVIDENCE["provider"] = {"variables": 0, "environment": 0, "logs": 0}`.
 - **`async def` functions are healed.** A coroutine function returns its
   coroutine before its body runs, so the synchronous wrapper's `try` never saw
   the exception: it surfaced at the caller's `await`, outside the decorator,
@@ -137,6 +143,21 @@ predating it keeps working and is completed from the template on load.
   over an AST
 
 ### Fixed
+- CodeQL findings in `healing_agent/` cleared, leaving that directory at zero
+  open alerts. A duplicate `context` assignment left over from a "reset" block
+  that had nothing to reset (`py/multiple-definition`); three bare `return`
+  statements mixed with `return fixed_code` made explicit
+  (`py/mixed-returns`); the JSON-linter stub read the payload into a variable
+  it never used and swallowed any error doing so, which read as a working
+  linter that always declined (`py/unused-local-variable`); and two adjacent
+  string literals inside a list are now explicitly parenthesised, because a
+  missing comma looks identical to intentional concatenation
+  (`py/implicit-string-concatenation-in-list`).
+  The two `py/empty-except` findings are dismissed rather than "fixed": the
+  console and the logging handler must never raise into the supervised
+  application, which is the guarantee 0.4.0 restored after a
+  `UnicodeEncodeError` replaced an application's own exception. Findings in
+  `tests/` and `examples/` are deliberately left alone
 - The four `agent_tools` modules printed directly instead of going through
   `console.emit()`. `tool_install_missing_module` runs on the healing path and
   its messages carry `♣`, so the `UnicodeEncodeError` that 0.4.0 fixed — a
