@@ -133,7 +133,13 @@ full specification in
          file scope. The zero-configuration alternative already designed is
          item 3: let the repository's own CI run the suite on a PR.
 3. **PR flow with repository CI as the zero-config gate** (`pr-checks` +
-   `APPLY="pr"`) — branch → commit patch → push → draft PR built from the
+   `APPLY="pr"`) — *first slice shipped: `GITHUB["pull_request"]` opens a
+   draft PR after a successful heal, committed through a temporary index so
+   the running process's working tree and index are never touched, with the
+   attempt ledger as the body, the failure fingerprint as the branch name
+   (one repair, one PR) and delivery failures unable to undo a repair that
+   worked. Remaining: waiting for checks and auto-merge.* —
+   branch → commit patch → push → draft PR built from the
    redacted provenance sidecar; optionally wait for the repository's OWN CI
    on the PR, continue locally with the candidate on green, and let GitHub
    native auto-merge (branch protection + required checks) land it. On red,

@@ -16,6 +16,7 @@ from .exception_saver import save_context
 from .git_patch_saver import apply_git_patch, save_git_patch
 from .github_issue import open_issue_for_failure
 from .log_buffer import arm_from_config_if_requested, recent_records
+from .pr_delivery import deliver as deliver_pull_request
 from .redactor import redact, scrub_value
 from .request import HealingRequested
 from .console import emit
@@ -329,6 +330,21 @@ async def _heal(
         if session_token is not None:
             if (session.get("config") or {}).get("DEBUG"):
                 emit(f"♣ Model usage: {usage_ledger.describe()}")
+            if healed_successfully and session.get("context") is not None:
+                # The mirror image of escalation: the process is healed, the
+                # repository is not, and without this the next deployment
+                # silently undoes the repair. Only the session owner delivers,
+                # and it delivers the ORIGINAL failure with every file healing
+                # rewrote - a nested attempt describes a candidate's error, not
+                # the failure a reviewer needs to read about.
+                session["context"]["attempts"] = attempt_ledger.ordered(
+                    session.get("attempts")
+                )
+                deliver_pull_request(
+                    session["context"],
+                    session["config"],
+                    files=list(session["backups"]),
+                )
             if not healed_successfully:
                 if session["restore_enabled"]:
                     _restore_session_sources(session)
@@ -595,7 +611,7 @@ async def _attempt_healing(
             new_module, getattr(func, "__qualname__", None), func.__name__
         )
         result = await _invoke(updated_func, args, kwargs, awaiting)
-    except Exception as still_failing:
+    except Exception:
         # Do not leave a partially loaded or still-failing repaired module in
         # sys.modules. The source backup remains available for explicit rollback.
         sys.modules[module_name] = module

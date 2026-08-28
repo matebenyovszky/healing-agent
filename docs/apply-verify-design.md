@@ -362,6 +362,29 @@ sequence is:
 
 ## The PR flow in detail (standard Git machinery only)
 
+> **Status: the first slice is implemented** (`GITHUB["pull_request"] =
+> "draft"|"ready"`, `pr_branch_prefix`, `pr_base`): after a SUCCESSFUL local
+> heal, branch → commit → push → pull request, with the attempt ledger as the
+> body. Waiting for the repository's own checks (`pr-checks`) and auto-merge
+> are the remaining slices, and the sketch below is unchanged by the first one.
+>
+> Two decisions were settled while building it:
+>
+> - **The commit never touches the working tree or the index.** We are inside a
+>   running process, frequently a scheduled job sharing a checkout with other
+>   work. `git add` would be visible to a concurrent `git status`, a developer's
+>   editor, another job. The commit is therefore built with plumbing against a
+>   temporary index (`GIT_INDEX_FILE`, `hash-object`, `read-tree`, `write-tree`,
+>   `commit-tree`, `update-ref`), so the PR carries exactly the repair and
+>   nothing else uncommitted on that machine. The tracked file mode is
+>   preserved, so a repaired script keeps its executable bit.
+> - **Delivery belongs to the outermost healing session**, next to escalation
+>   and symmetric with it: escalation on definitive failure, delivery on
+>   success. Delivering from each attempt would open one PR per nested attempt
+>   and title them after the agent's own dead ends instead of the failure the
+>   application hit. The branch name is the failure fingerprint — the same one
+>   that deduplicates issues — so a recurrence proposes nothing.
+
 ```text
 candidate passes local gates
   → branch from current HEAD → commit patch (provenance sidecar in PR body)

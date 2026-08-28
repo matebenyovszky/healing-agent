@@ -78,6 +78,41 @@ predating it keeps working and is completed from the template on load.
   one deliverable
 
 ### Added
+- **A repair that worked can now be proposed as a pull request, so the next
+  deployment does not silently undo it.** Until now a successful heal lived
+  only as a rewritten file on one machine: the process recovered, the
+  repository never learned anything, and the fix was lost at the next deploy —
+  after which the 02:00 job broke exactly the same way. `GITHUB` gains
+  `pull_request` (`off` | `draft` | `ready`, default `off`),
+  `pr_branch_prefix` and `pr_base`. Additive: an existing config keeps the
+  previous behavior, and a config predating the keys is completed from the
+  template on load. **No breaking change.** The PR body is the attempt ledger,
+  so a reviewer sees which candidates were rejected by which gate and why,
+  rather than "an AI wrote this". Four properties took deliberate work:
+  - **the commit never touches the working tree or the index.** Healing runs
+    inside a live process, often a scheduled job sharing a checkout with a
+    developer's editor or another job, where `git add` would be visible to all
+    of them. The commit is built with Git plumbing against a temporary index
+    (`GIT_INDEX_FILE`), swapping the repaired blobs into HEAD's tree — so the
+    PR contains exactly the repair, never whatever else was uncommitted on that
+    machine. The tracked file mode is preserved, because forcing `100644` would
+    silently drop the executable bit from a repaired script
+  - **one repair, one pull request.** Delivery happens in the outermost healing
+    session, next to escalation and symmetric with it. Nested attempts each
+    capture their own context describing a *candidate's* error, so delivering
+    from the attempt would have opened one PR per attempt and titled them after
+    Healing Agent's own dead ends. The branch name is the failure fingerprint —
+    the same one that deduplicates issues — so a recurrence in another process,
+    or after a restart, finds the branch and proposes nothing
+  - **a delivery failure can never undo a repair that worked.** Every error is
+    reported and swallowed: an expired token, a protected branch or no network
+    leaves the process running healed
+  - **the default branch is never pushed to**, and an existing branch is never
+    moved
+  Tested against real temporary repositories rather than mocks — plumbing
+  behavior is exactly what a mock gets wrong — including a real push to a bare
+  remote, and an end-to-end nested heal that fails if delivery is moved back
+  into the attempt.
 - **An escalated issue now says what was tried and why each attempt failed.**
   It used to show a single candidate with no indication that it had been
   REJECTED, no reason, and no trace of the attempts after the first — so a

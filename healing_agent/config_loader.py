@@ -271,6 +271,9 @@ def validate_config(config):
                     raise ValueError(
                         f"ENVIRONMENT_VARS entries must be strings, got {name!r}"
                     )
+        github = config.get('GITHUB') or {}
+        if github.get('pull_request', 'off') not in {'off', 'draft', 'ready'}:
+            raise ValueError("GITHUB['pull_request'] must be one of: off, draft, ready")
         capture_chars = config.get('CAPTURE_VALUE_CHARS')
         if capture_chars is not None and (
             isinstance(capture_chars, bool)

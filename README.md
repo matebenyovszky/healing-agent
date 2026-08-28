@@ -22,6 +22,7 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 - 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
 - 🙋 **Ask for a repair, don't wait for a crash**: call `request_healing(reason)` from a handled error branch
 - 🎫 **GitHub escalation**: a failure it could not repair opens an issue in your own repository, deduplicated, so the attempt is never lost
+- 🔀 **Pull request delivery**: a repair that *worked* is proposed as a draft PR — with the full attempt ledger as the description — so the next deployment does not silently undo it
 - 🧩 **Methods too**: definitions are found by qualname, so class methods heal like plain functions (nested functions excepted, and refused explicitly)
 - ⚡ **`async def` works the same way**: coroutine functions are healed by the same session, not a parallel one
 - 📝 **Inherits your logging**: output goes to the standard `healing_agent` logger, so your level, handlers and formatters apply — and prints as before if you configured none
@@ -359,6 +360,58 @@ The issue carries the error type and message, the function, the repository-relat
 On an internal repository the richer levels are a gift rather than a risk, which is why all three exist instead of one cautious default.
 
 **The token is never in your config file.** `token_env` names the environment variable that holds it, and `gh` CLI authentication is used as a fallback. `healing_agent_config.py` stays free of secrets.
+
+## When healing succeeds: propose the repair 🔀
+
+A repair that worked keeps the process alive — and lives only in a file on one
+machine. The next deployment overwrites it, and the 02:00 job breaks again.
+The mirror image of escalation closes that gap:
+
+```python
+GITHUB = {
+    "repo": None,                    # "owner/name"; None = detect from the git remote
+    "token_env": "GITHUB_TOKEN",     # NAME of the env var holding the token, never the value
+    "pull_request": "draft",         # off | draft | ready
+    "pr_branch_prefix": "healing-agent/",
+    "pr_base": None,                 # None = the remote's default branch
+}
+```
+
+The pull request body is the **attempt ledger**: the analysis, every candidate
+that was tried, and why each was rejected — the same record an escalated issue
+carries. A reviewer does not get "an AI wrote this", they get *three candidates,
+the first two rejected by your own verify gate with this output, the third
+accepted and running in production since 02:03*.
+
+**Nothing touches your working tree or your index.** Healing happens inside a
+running program, often a scheduled job sharing a checkout with a developer's
+editor or another job — staging a file would be visible to all of them. The
+commit is built with Git plumbing against a temporary index (`GIT_INDEX_FILE`),
+swapping the repaired blobs into HEAD's tree. The consequence is deliberate:
+the pull request contains **exactly the repair**, never whatever else happened
+to be uncommitted on that machine. The executable bit is preserved, so a
+repaired script does not quietly lose it.
+
+Guardrails, none of them optional:
+
+- **the default branch is never a push target**, and an existing branch is
+  never moved;
+- **one repair, one pull request.** The branch name *is* the failure
+  fingerprint, so the same failure recurring in another process — or after a
+  restart — finds the branch already there and proposes nothing. Nested repair
+  attempts are one repair: the PR describes the failure your application hit,
+  not Healing Agent's own dead ends;
+- **drafts by default**, because a human still decides;
+- **a delivery failure never undoes a repair that worked.** No network problem,
+  expired token or protected branch can turn a healed process into a broken
+  one — the failure is reported and the process keeps running healed;
+- **only after success.** A failure escalates as an issue; it never proposes a
+  fix.
+
+This is the first feature that needs a token with **write** access
+(`contents:write`, `pull_requests:write`). It is `off` by default, and it is
+worth deciding deliberately whether the machine running your batch jobs should
+hold one.
 
 ## Configuration ⚙️
 

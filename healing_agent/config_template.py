@@ -152,6 +152,19 @@ GITHUB = {
     #   ai-anonymized - also attach a context JSON with values replaced by an AI pass
     "issue_detail": "redacted",
     "issue_label": "healing-agent",  # label used for the issue and for deduplication
+    # Propose a SUCCESSFUL repair as a pull request, so the process keeps
+    # running healed AND the repository learns about it - otherwise the next
+    # deployment silently undoes the fix.
+    #   off   - no pull request
+    #   draft - open it as a draft (recommended: a human still decides)
+    #   ready - open it ready for review
+    # The commit is built with git plumbing against a temporary index, so your
+    # working tree and index are never touched: a scheduled job repairing
+    # itself must not be visible to anything else sharing that checkout.
+    # Requires a token with contents:write and pull_requests:write.
+    "pull_request": "off",
+    "pr_branch_prefix": "healing-agent/",
+    "pr_base": None,  # None = the remote's default branch; never pushed to directly
 }
 
 # Observation Configuration
