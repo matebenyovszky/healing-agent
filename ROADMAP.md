@@ -260,6 +260,15 @@ full specification in
      provider now offers a structured/tool-calling mode that removes the
      failure class entirely. This also unblocks pulled evidence (ROADMAP
      item 7), which needs tool calls to exist at all.
+   - **OpenAI Responses API as an opt-in alternative to Chat Completions** —
+     `_get_openai_response`/`_get_azure_response` call
+     `client.chat.completions.create`, which stays fully supported, so this is
+     not a migration. It matters only as the natural carrier for structured
+     output and hosted tool use, i.e. only once the point above is being built;
+     evaluate it there rather than as a standalone change. The provider layer
+     already lives in one file (`ai_broker.py`), so adding a second call path
+     behind a config flag is a contained, isolated change whenever it is worth
+     doing.
    - **a published compatibility matrix** — model IDs are configurable and
      none is hardcoded, which is right, but it leaves the user with no
      recommendation at all. The matrix is an output of the benchmark
