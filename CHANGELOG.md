@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — releasing as 0.5.0
+## [0.5.0] - 2026-10-25
 Adds functionality, removes nothing: a MINOR bump. `CONFIG_SCHEMA_VERSION` also
 moves to `0.5.0` because `LOG_MODE` is a new configuration key; a config file
 predating it keeps working and is completed from the template on load.
