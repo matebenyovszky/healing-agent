@@ -3,7 +3,6 @@ import sys
 import textwrap
 
 import healing_agent.verify_gate as verify_gate
-from healing_agent.verify_gate import _argv, verify_candidate
 
 
 def _context(source):
@@ -42,7 +41,7 @@ def test_command_gate_runs_against_isolated_candidate(tmp_path):
         encoding="utf-8",
     )
 
-    assert verify_candidate(
+    assert verify_gate.verify_candidate(
         _context(source),
         "def broken():\n    return 2\n",
         {"VERIFY_COMMAND": [sys.executable, str(probe)]},
@@ -60,7 +59,7 @@ def test_command_gate_rejects_nonzero_exit_with_json_detail(tmp_path):
         encoding="utf-8",
     )
 
-    assert not verify_candidate(
+    assert not verify_gate.verify_candidate(
         _context(source),
         "def broken():\n    return 2\n",
         {"VERIFY_COMMAND": [sys.executable, str(probe)]},
@@ -71,7 +70,7 @@ def test_command_gate_rejects_nonzero_exit_with_json_detail(tmp_path):
 def test_command_string_uses_windows_safe_split(monkeypatch):
     monkeypatch.setattr(verify_gate.os, "name", "nt")
 
-    assert _argv('"C:\\Program Files\\Aether\\aether.exe" check') == [
+    assert verify_gate._argv('"C:\\Program Files\\Aether\\aether.exe" check') == [
         "C:\\Program Files\\Aether\\aether.exe",
         "check",
     ]
@@ -90,7 +89,7 @@ def test_unstartable_gate_is_a_configuration_error_not_a_rejection(tmp_path):
     source.write_text("def broken():\n    return 1\n", encoding="utf-8")
 
     with pytest.raises(verify_gate.VerifyGateConfigurationError):
-        verify_candidate(
+        verify_gate.verify_candidate(
             _context(source),
             "def broken():\n    return 2\n",
             {"VERIFY_COMMAND": ["definitely-not-an-executable-xyz"]},
@@ -114,7 +113,7 @@ def test_several_gates_run_in_order_and_stop_at_the_first_rejection(tmp_path):
         encoding="utf-8",
     )
 
-    assert not verify_candidate(
+    assert not verify_gate.verify_candidate(
         _context(source),
         "def broken():\n    return 2\n",
         {"VERIFY_COMMAND": [[sys.executable, str(reject)], [sys.executable, str(second)]]},

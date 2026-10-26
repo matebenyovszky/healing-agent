@@ -173,7 +173,12 @@ def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
 def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle Anthropic API requests"""
     import anthropic
-    client = anthropic.Anthropic(api_key=config['api_key'])
+    # base_url was read from the config file but never used, so a request
+    # meant for an EU or private gateway went to the public endpoint. None
+    # keeps the SDK's own ANTHROPIC_BASE_URL lookup.
+    client = anthropic.Anthropic(
+        api_key=config['api_key'], base_url=config.get('base_url') or None
+    )
 
     try:
         request_kwargs = {

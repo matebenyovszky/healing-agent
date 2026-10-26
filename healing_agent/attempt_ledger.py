@@ -21,6 +21,7 @@ candidate workspace, so it is not trusted to be clean merely because
 Healing Agent produced the surrounding entry.
 """
 
+import re
 from typing import Any, Dict, List, Optional
 
 #: Why an attempt ended. The wording is what a reader sees, so it states the
@@ -37,6 +38,32 @@ OUTCOMES = {
 #: A candidate is shown in full up to this length; beyond it the reader is
 #: better served by the artifact on disk than by a wall of code in an issue.
 CANDIDATE_CHARS = 1200
+
+
+# Issue and PR bodies are rendered by GitHub, and most of what goes into them
+# is not ours: the exception message is the program's input, the analysis and
+# the candidates are model output that program input can steer. Rendered as
+# Markdown, a line of three backticks closes our fence and whatever follows is
+# live - an image link the camo proxy fetches with captured data in its URL,
+# an @mention, a link that looks like ours. Fenced verbatim, it is only text.
+
+def _longest_backtick_run(text: str) -> int:
+    return max((len(run) for run in re.findall(r"`+", text)), default=0)
+
+
+def fence(text: Any, language: str = "") -> List[str]:
+    """Lines of a code block that ``text`` cannot close from inside."""
+    text = str(text).rstrip()
+    marker = "`" * max(3, _longest_backtick_run(text) + 1)
+    return [marker + language, text, marker]
+
+
+def code_span(text: Any) -> str:
+    """An inline code span that ``text`` cannot close, on one line."""
+    text = " ".join(str(text).split())
+    marker = "`" * (_longest_backtick_run(text) + 1)
+    # A span whose content starts or ends with a backtick needs the padding.
+    return f"{marker} {text} {marker}" if text.startswith("`") or text.endswith("`") else f"{marker}{text}{marker}"
 
 
 def entry(
@@ -83,20 +110,22 @@ def render(attempts: Optional[List[Dict[str, Any]]], candidate_chars: int = CAND
         lines.append(f"**Attempt {number}** — {record.get('summary', record.get('outcome'))}")
         detail = record.get("detail")
         if detail:
-            lines += ["", f"> {str(detail).strip()}"]
+            lines += [""] + fence(str(detail).strip(), "text")
         candidate = record.get("candidate")
         if candidate:
             shown = str(candidate).rstrip()
             if len(shown) > candidate_chars:
                 shown = shown[:candidate_chars] + "\n… truncated; full candidate in _healing_agent_fixes/"
-            lines += ["", "<details><summary>Candidate</summary>", "", "```python", shown, "```", "", "</details>"]
+            lines += ["", "<details><summary>Candidate</summary>", ""] + fence(shown, "python") + ["", "</details>"]
         lines.append("")
 
     accepted = any(record.get("outcome") == "healed" for record in attempts)
     if not accepted:
         lines += [
-            "Every candidate above was rejected, so none of these directions "
-            "is the repair — they are the directions already known to fail.",
+            (
+                "Every candidate above was rejected, so none of these directions "
+                "is the repair — they are the directions already known to fail."
+            ),
             "",
         ]
     return lines

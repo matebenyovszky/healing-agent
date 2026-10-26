@@ -15,6 +15,7 @@ from .redactor import (
     DEFAULT_PLACEHOLDER,
     get_sensitive_matcher,
     is_sensitive_name,
+    redact,
     scrub_value,
 )
 
@@ -36,6 +37,17 @@ def safe_str(obj: Any) -> str:
         return str(obj)
     except Exception:
         return f"<Unprintable {type(obj).__name__} object>"
+
+
+def _redacted_str(value: Any, config: Optional[dict]) -> str:
+    """Stringify a captured value, redacting it by name FIRST.
+
+    The final chokepoint redacts by key, and a stringified dict has no keys
+    left: `call({"Authorization": "Bearer ..."})` reached the provider, the
+    saved context and the issue verbatim. Containers are redacted while their
+    structure still exists; everything else is stringified as before.
+    """
+    return safe_str(redact(value, config))
 
 def get_function_source(func: Callable) -> tuple[list[str], int]:
     """
@@ -194,7 +206,7 @@ def capture_context(
             # Collect argument information
             arguments_info = {
                 k: {
-                    'value': str(v),
+                    'value': _redacted_str(v, config),
                     'type': str(type(v).__name__)
                 } 
                 for k, v in inspect.getcallargs(func, *(args or []), **(kwargs or {})).items()
@@ -241,7 +253,7 @@ def capture_context(
             if is_sensitive_name(key, _matcher):
                 return {'type': type_name, 'value_preview': DEFAULT_PLACEHOLDER}
             try:
-                var_str = str(value)[:_limit]
+                var_str = _redacted_str(value, config)[:_limit]
             except Exception:
                 var_str = '<Error converting to string>'
             return {'type': type_name, 'value_preview': var_str}
@@ -310,7 +322,7 @@ def capture_context(
                         if isinstance(value, (str, int, float, bool, type(None))):
                             error_details['attributes'][attr] = value
                         else:
-                            error_details['attributes'][attr] = safe_str(value)
+                            error_details['attributes'][attr] = _redacted_str(value, config)
                 except Exception as e:
                     error_details['attributes'][attr] = f"<Error accessing attribute: {str(e)}>"
 

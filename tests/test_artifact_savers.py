@@ -5,6 +5,8 @@ failed. Anything they raise travels instead of the original error, which is the
 one guarantee this project makes unconditionally.
 """
 
+from pathlib import Path
+
 from healing_agent import ai_fix_saver, exception_saver
 
 
@@ -27,7 +29,7 @@ def test_saved_fix_header_carries_the_real_error(tmp_path):
     path = ai_fix_saver.save_ai_fix(_context(tmp_path))
 
     assert path is not None
-    header = open(path, encoding="utf-8").read()
+    header = Path(path).read_text(encoding="utf-8")
     assert "# Error type: ZeroDivisionError" in header
     assert "# Error message: division by zero" in header
     assert "Unknown" not in header

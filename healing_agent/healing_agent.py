@@ -395,7 +395,13 @@ async def _attempt_healing(
         f"{'✧' * 25} ⚕️⚕️⚕️ ♣"
     )
     emit(f"♣ Repair attempt {attempt_number}/{max_attempts}")
-    emit(f"♣ ⚕️  Error caught: {type(error).__name__} - {error}")
+    # Printed before the redaction chokepoint, and with LOG_MODE="auto" this
+    # line lands in the application's own log store: the message gets the
+    # value scrubber the ledger details get.
+    message = str(error)
+    if config.get("REDACT_SECRETS", True) is not False:
+        message = scrub_value(message)
+    emit(f"♣ ⚕️  Error caught: {type(error).__name__} - {message}")
 
     context = capture_context(
         func=func,

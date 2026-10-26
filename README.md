@@ -353,8 +353,8 @@ The issue carries the error type and message, the function, the repository-relat
 
 | `issue_detail` | The issue contains |
 |---|---|
-| `reference` (default) | identity and pointers to the local artifacts — no captured values are uploaded, though note the exception *message* is included, and `KeyError: 'customer_tax_id'` is itself a disclosure |
-| `redacted` | additionally the redacted context JSON (arguments, locals, traceback) |
+| `reference` | identity, pointers to the local artifacts, the generated analysis and the attempt ledger (each candidate and why it failed) — no captured context is attached, though the exception *message* is included, `KeyError: 'customer_tax_id'` is itself a disclosure, and the analysis may restate a value it saw |
+| `redacted` (default) | additionally the redacted context JSON (arguments, locals, traceback) |
 | `ai-anonymized` | additionally a context JSON where an extra AI pass replaced values with placeholders |
 
 On an internal repository the richer levels are a gift rather than a risk, which is why all three exist instead of one cautious default.

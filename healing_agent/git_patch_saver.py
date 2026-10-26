@@ -23,6 +23,10 @@ from typing import Any, Dict, Optional, Tuple
 from .code_replacer import build_replacement_source
 from .console import emit
 
+#: A git call that hangs (a credential prompt, a locked index on a network
+#: share) must not hold the failing application hostage.
+GIT_TIMEOUT_SECONDS = 60
+
 
 class GitPatchError(RuntimeError):
     """Raised when a requested Git operation cannot be completed safely."""
@@ -45,9 +49,10 @@ class GitRepository:
                 ["git", "-C", str(candidate), "rev-parse", "--show-toplevel"],
                 capture_output=True,
                 text=True,
+                timeout=GIT_TIMEOUT_SECONDS,
                 check=False,
             )
-        except OSError:
+        except (OSError, subprocess.TimeoutExpired):
             return None
         if result.returncode != 0 or not result.stdout.strip():
             return None
@@ -58,6 +63,7 @@ class GitRepository:
             [self.executable, "-C", str(self.root), *arguments],
             capture_output=True,
             text=True,
+            timeout=GIT_TIMEOUT_SECONDS,
             check=check,
         )
 
@@ -197,7 +203,10 @@ def verify_git_patch(
         # ``git apply --check`` can validate a patch in a directory containing
         # a marker-only .git, which is useful before a repository is initialised.
         cwd = Path(working_directory).resolve() if working_directory else patch.parent
-        result = subprocess.run(["git", "apply", "--check", str(patch)], cwd=cwd, capture_output=True, text=True, check=False)
+        result = subprocess.run(
+            ["git", "apply", "--check", str(patch)],
+            cwd=cwd, capture_output=True, text=True, timeout=GIT_TIMEOUT_SECONDS, check=False,
+        )
     else:
         result = repo.run("apply", "--check", str(patch))
     return result.returncode == 0
