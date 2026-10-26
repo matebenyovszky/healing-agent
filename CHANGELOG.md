@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+No breaking changes and no change to runtime behaviour. Everything in this
+entry concerns how the project is built, released and reported on.
+
+### Added
+- **`SECURITY.md`**: private vulnerability reporting through GitHub, response
+  targets, coordinated disclosure, supported versions, and what counts as a
+  vulnerability in a library that applies generated code by design
+- **`docs/security-compliance.md`**: where captured data goes, a locked-down
+  configuration profile for regulated environments, and a mapping to NIS2
+  (Hungarian Act LXIX of 2024), GDPR and the Cyber Resilience Act
+- CI: dependency review on every PR, `pip-audit` over the fully resolved
+  dependency tree (extras included), CodeQL analysis of the workflows
+  themselves, OpenSSF Scorecard
+- Dependabot: patch and minor updates merge automatically once every required
+  check passes. Majors still wait for a human. Pre-commit hooks are now
+  tracked too, and every ecosystem waits 7 days before proposing a new release
+
+### Changed
+- Every workflow action is pinned to a full commit SHA. Checkouts no longer
+  persist the token
+- The release workflow builds in one job and publishes from another: the job
+  that runs third-party build code can no longer mint a PyPI credential
+- The gitleaks binary used by the secret scan is verified against its
+  published SHA-256 checksum, and is updated from 8.24.3 to 8.30.1. The
+  pre-commit hooks are updated as well: gitleaks 8.30.1, pre-commit-hooks 6.0.0
+- Dev requirement `pytest>=9.0.3` (was `>=8`): earlier versions are affected
+  by CVE-2025-71176 (insecure tmpdir handling)
+- CodeQL no longer reports on the two intentionally broken example files the
+  test suite heals
+
 ## [0.5.0] - 2026-10-25
 Adds functionality, removes nothing: a MINOR bump. `CONFIG_SCHEMA_VERSION` also
 moves to `0.5.0` because `LOG_MODE` is a new configuration key; a config file

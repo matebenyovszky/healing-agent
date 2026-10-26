@@ -12,8 +12,10 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
           cache: pip
@@ -31,8 +33,10 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
@@ -43,10 +47,37 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
       - run: python -m pip install --upgrade pip build twine
       - run: python -m build
       - run: python -m twine check dist/*
+
+  # Dependabot alerts only see what pyproject.toml declares; this sees the
+  # whole resolved tree, extras included, which is what a user installs.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip pip-audit
+      - run: python -m pip install ".[anthropic,litellm]"
+      # Each ignore is a decision, not a silence: say why it does not apply,
+      # and drop it as soon as the cause upstream is gone.
+      #   filelock CVE-2026-112907/-112913/-112940: litellm caps filelock <4
+      #   while the fix is 4.2.1. The flaws are in SoftFileLock and the
+      #   SQLite-backed ReadWriteLock; litellm imports only FileLock (in its
+      #   proxy CLI) and Healing Agent imports filelock not at all.
+      - run: >
+          python -m pip_audit --skip-editable --progress-spinner off
+          --ignore-vuln CVE-2026-112907
+          --ignore-vuln CVE-2026-112913
+          --ignore-vuln CVE-2026-112940

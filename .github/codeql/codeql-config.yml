@@ -1,0 +1,8 @@
+name: healing-agent CodeQL config
+
+# These files are broken on purpose: they are the bugs the test suite and the
+# examples ask Healing Agent to heal. Their alerts are true and wanted, so they
+# would only bury the findings that are not.
+paths-ignore:
+  - tests/buggy_code_example.py
+  - examples/tests/buggy_code_example.py

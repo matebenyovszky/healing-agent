@@ -1,10 +1,19 @@
 version: 2
 updates:
-  # The three workflows pin actions to a major tag; nothing else refreshes them.
+  # Actions are pinned to a full commit SHA with the version in a trailing
+  # comment; Dependabot updates both, so every bump arrives as a reviewable PR.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    # A release has to survive a week in the wild before it is proposed: most
+    # hijacked releases are spotted and yanked within days. Security updates
+    # ignore the cooldown, so a real fix is never delayed by it.
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns: ["*"]
     commit-message:
       prefix: "ci"
 
@@ -15,9 +24,21 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "deps"
     groups:
       dev-dependencies:
         dependency-type: development
         patterns: ["*"]
+
+  # The local secret-scanning hooks drift silently otherwise.
+  - package-ecosystem: pre-commit
+    directory: "/"
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
