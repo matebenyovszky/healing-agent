@@ -67,10 +67,10 @@ def test_installed_version_matches_pyproject_when_installed():
 
 
 def test_version_is_reachable_from_the_package():
-    import healing_agent
+    from healing_agent import CONFIG_SCHEMA_VERSION, __version__
 
-    assert healing_agent.__version__ == _version.__version__
-    assert healing_agent.CONFIG_SCHEMA_VERSION == _version.CONFIG_SCHEMA_VERSION
+    assert __version__ == _version.__version__
+    assert CONFIG_SCHEMA_VERSION == _version.CONFIG_SCHEMA_VERSION
 
 
 @pytest.mark.parametrize(

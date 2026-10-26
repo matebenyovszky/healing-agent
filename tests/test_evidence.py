@@ -9,6 +9,7 @@ differs, and these tests pin both halves of that claim.
 import importlib
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -176,7 +177,7 @@ def test_disk_artifact_is_capped_but_still_written(tmp_path, monkeypatch):
     path = saver.save_context(context)
 
     assert path is not None, "an oversized context must still be saved"
-    saved = json.loads(open(path, encoding="utf-8").read())
+    saved = json.loads(Path(path).read_text(encoding="utf-8"))
     assert "artifact_note" in saved, "the trim was not recorded"
     assert os.path.getsize(path) < 60000
 

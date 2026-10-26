@@ -54,8 +54,12 @@ DEFAULT_SENSITIVE_PATTERNS = [
 # a URL, `SENTRY_DSN` embeds a key, and a licence variable may hold a JWT. None
 # of those names look sensitive. These patterns catch the value instead.
 
+# The scheme is bounded on purpose. Unbounded (`[\w+.-]*`), the engine retries
+# it from every start position of a long word run, which is quadratic: 2.3 s on
+# a 32 KB exception message, minutes on a megabyte - inside the failure path.
+# No registered URI scheme is longer than 32 characters.
 _URL_CREDENTIALS = re.compile(
-    r"(?P<scheme>[a-zA-Z][\w+.-]*://)(?P<user>[^:/@\s]+)(?::(?P<password>[^@/\s]+))?@"
+    r"(?P<scheme>[a-zA-Z][\w+.-]{0,31}://)(?P<user>[^:/@\s]+)(?::(?P<password>[^@/\s]+))?@"
 )
 
 _SECRET_SHAPES = re.compile(
@@ -121,7 +125,8 @@ def is_sensitive_name(name: Any, matcher: "re.Pattern") -> bool:
 
 def _redact(obj: Any, matcher: "re.Pattern", placeholder: str, depth: int) -> Any:
     if depth > _MAX_DEPTH:
-        return obj
+        # Fail closed: a structure too deep to inspect is not known to be safe.
+        return placeholder
 
     if isinstance(obj, Mapping):
         result = {}
@@ -159,3 +164,4 @@ def redact(context: Any, config: Optional[dict] = None) -> Any:
 
     matcher = get_sensitive_matcher(config)
     return _redact(context, matcher, placeholder, 0)
+

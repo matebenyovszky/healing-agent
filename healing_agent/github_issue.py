@@ -9,9 +9,10 @@ Privacy is explicit policy. Exception context and captured variables may hold
 sensitive data, so the amount of detail that leaves the machine is chosen with
 `GITHUB["issue_detail"]`:
 
-    reference       only error/function identity plus pointers to the LOCAL
-                    artifacts (default; no captured values are uploaded)
-    redacted        additionally attach the redacted context JSON
+    reference       error/function identity, pointers to the LOCAL artifacts,
+                    the model's analysis and the attempt ledger (candidates
+                    and why each failed); no captured context is attached
+    redacted        additionally attach the redacted context JSON (default)
     ai-anonymized   additionally attach an AI-anonymized context JSON
 
 Authentication is host-level: the config names the environment variable that
@@ -49,14 +50,24 @@ def _run(argv, cwd: Optional[str] = None) -> Optional[str]:
     return (result.stdout or "").strip() or None
 
 
+# Anchored to the host on purpose. Searching for "github.com" anywhere in the
+# URL turned a mirror such as https://git.corp.example/mirrors/github.com/psf/requests
+# into psf/requests, and the redacted context of a private job was posted to a
+# public upstream project with the operator's token.
+_GITHUB_REMOTE = re.compile(
+    r"^(?:https?://(?:[^@/\s]+@)?(?:www\.)?github\.com/|(?:ssh://)?git@github\.com[:/])"
+    r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100}?)(?:\.git)?/?$"
+)
+
+
 def detect_repo(file_path: str) -> Optional[str]:
     """Return "owner/name" for the git remote containing file_path."""
     directory = os.path.dirname(os.path.abspath(file_path)) or None
     url = _run(["git", "remote", "get-url", "origin"], cwd=directory)
     if not url:
         return None
-    match = re.search(r"github\.com[:/]+([^/]+)/(.+?)(?:\.git)?/?$", url)
-    if not match:
+    match = _GITHUB_REMOTE.match(url.strip())
+    if not match or match.group(2) in {".", ".."}:
         return None
     return f"{match.group(1)}/{match.group(2)}"
 
@@ -157,16 +168,21 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
         f"({relative_path})"
     )
 
+    from .attempt_ledger import code_span, fence, render as render_attempts
+
+    error_summary = f"{error.get('type')}: {error.get('message')}"
+    location = f"{relative_path}:{error.get('line_number')}"
+
     lines = [
         (
             "Automatic healing did not produce a working repair, so this "
             "failure is escalated for review."
         ),
         "",
-        f"- **Error:** `{error.get('type')}: {error.get('message')}`",
-        f"- **Function:** `{function_name}`",
-        f"- **Location:** `{relative_path}:{error.get('line_number')}`",
-        f"- **Failing line:** `{error.get('error_line')}`",
+        f"- **Error:** {code_span(error_summary)}",
+        f"- **Function:** {code_span(function_name)}",
+        f"- **Location:** {code_span(location)}",
+        f"- **Failing line:** {code_span(error.get('error_line'))}",
         f"- **Detected:** {context.get('timestamp', datetime.datetime.now().isoformat())}",
         f"- **Detail level:** `{detail}`",
         "",
@@ -182,14 +198,12 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
 
     hint = context.get("ai_hint")
     if hint:
-        lines += ["", "### Analysis", "", str(hint)]
+        lines += ["", "### Analysis", ""] + fence(hint, "text")
 
     # What was tried and why each attempt failed. This is the half that makes
     # the issue agent INPUT rather than a notice: without it a reader sees a
     # candidate with no sign that it was rejected, and would take a known-bad
     # direction for the repair.
-    from .attempt_ledger import render as render_attempts
-
     lines += render_attempts(context.get("attempts"))
 
     if detail in {"redacted", "ai-anonymized"}:
@@ -216,9 +230,7 @@ def build_issue(context: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, st
                 "",
                 "<details><summary>Show context</summary>",
                 "",
-                "```json",
-                payload,
-                "```",
+            ] + fence(payload, "json") + [
                 "",
                 "</details>",
             ]

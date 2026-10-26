@@ -124,7 +124,7 @@ def commit_files(
             try:
                 os.unlink(blob_source)
             except OSError:
-                pass
+                pass  # a leftover temp file is harmless; the blob is in git
         if not blob:
             emit("♣ PR delivery skipped: could not write the repaired blob")
             return None
@@ -150,7 +150,7 @@ def commit_files(
             os.unlink(index_path)
             os.rmdir(os.path.dirname(index_path))
         except OSError:
-            pass
+            pass  # a leftover temporary index is harmless; the tree is written
 
     commit = _git(["commit-tree", tree, "-p", head, "-m", message], cwd=root)
     if not commit:
@@ -182,23 +182,26 @@ def build_pr_body(context: Dict[str, Any], config: Dict[str, Any]) -> str:
     "three candidates, the first two rejected by the declared verify command
     with this output, the third accepted" is.
     """
-    from .attempt_ledger import render as render_attempts
+    from .attempt_ledger import code_span, fence, render as render_attempts
 
     error = context.get("error") or {}
     function_info = context.get("function_info") or {}
+    error_summary = f"{error.get('type')}: {error.get('message')}"
     lines = [
-        "Healing Agent repaired this function at runtime and is proposing the "
-        "change for review.",
+        (
+            "Healing Agent repaired this function at runtime and is proposing the "
+            "change for review."
+        ),
         "",
-        f"- **Error:** `{error.get('type')}: {error.get('message')}`",
-        f"- **Function:** `{function_info.get('qualname') or function_info.get('name')}`",
-        f"- **Failing line:** `{error.get('error_line')}`",
+        f"- **Error:** {code_span(error_summary)}",
+        f"- **Function:** {code_span(function_info.get('qualname') or function_info.get('name'))}",
+        f"- **Failing line:** {code_span(error.get('error_line'))}",
         f"- **Detected:** {context.get('timestamp', '')}",
     ]
 
     hint = context.get("ai_hint")
     if hint:
-        lines += ["", "### Analysis", "", str(hint)]
+        lines += ["", "### Analysis", ""] + fence(hint, "text")
 
     lines += render_attempts(context.get("attempts"))
 
@@ -206,10 +209,12 @@ def build_pr_body(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         "",
         "---",
         "",
-        "This repair was produced from a live failure: the arguments and local "
-        "variables that caused it existed only in that process. It has passed "
-        "the gates configured on the machine that made it, and is proposed, "
-        "not merged.",
+        (
+            "This repair was produced from a live failure: the arguments and local "
+            "variables that caused it existed only in that process. It has passed "
+            "the gates configured on the machine that made it, and is proposed, "
+            "not merged."
+        ),
     ]
     return "\n".join(lines)
 

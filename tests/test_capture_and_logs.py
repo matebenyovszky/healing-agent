@@ -9,6 +9,7 @@ import importlib
 import json
 import logging
 import os
+from pathlib import Path
 
 import pytest
 
@@ -45,7 +46,7 @@ def test_capture_writes_a_redacted_snapshot(tmp_path, monkeypatch):
     path = capture_module.capture("supplier response", CAPTURE_DIR=str(tmp_path))
 
     assert path is not None
-    payload = json.loads(open(path, encoding="utf-8").read())
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     assert payload["capture_label"] == "supplier response"
     assert payload["capture_type"] == "debug"
     assert payload["source"]["function"] == "test_capture_writes_a_redacted_snapshot"
@@ -60,7 +61,7 @@ def test_capture_snapshots_the_callers_frame(tmp_path):
     """The snapshot must describe the caller, not capture()'s own internals."""
     marker_value = "caller-frame-marker"
     path = capture_module.capture("frame check", CAPTURE_DIR=str(tmp_path))
-    payload = json.loads(open(path, encoding="utf-8").read())
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
     previews = [
         entry.get("value_preview", "")
         for entry in payload["variables"]["locals"].values()

@@ -6,8 +6,44 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-No breaking changes and no change to runtime behaviour. Everything in this
-entry concerns how the project is built, released and reported on.
+Security fixes and supply-chain hardening. No configuration key, import path
+or signature changes. Three small behaviour changes are flagged under Changed.
+Each one exists only because the old behaviour leaked data or let input steer
+an action.
+
+### Fixed
+- **Secrets inside containers escaped redaction.** Arguments, variable
+  previews and exception attributes were turned into strings *before* the
+  redaction step, and a stringified dict has no keys left to match. So
+  `call_api({"Authorization": "Bearer …"}, {"db_password": "…"})` sent both
+  values verbatim to the provider, the saved context and a `redacted` issue.
+  Containers are now redacted by name while their structure still exists,
+  under the same `REDACT_SECRETS` switch
+- **The URL-credential scrubber took quadratic time.** An unbounded scheme
+  pattern made a long word run cost 2.3 s at 32 KB, and minutes at a megabyte,
+  inside the failure path. The pattern is now bounded and stays linear
+- **Issue and PR bodies rendered untrusted text as live Markdown.** The
+  exception message, the model's analysis, gate output and candidates are
+  data the failing program received, or text it can steer. A line of three
+  backticks closed our code fence, so an image link (fetched by GitHub's
+  image proxy, with data in its URL), an @mention or a look-alike link became
+  live. These parts are now placed in fences and code spans that the text
+  cannot close from inside
+- **Repository detection was not anchored to the GitHub host.** A remote such
+  as `https://git.corp.example/mirrors/github.com/psf/requests` resolved to
+  `psf/requests`, so an escalated issue, with its redacted context, would have
+  gone to that public project using your token. Only real `github.com` remotes
+  are recognised now. Set `GITHUB["repo"]` explicitly for anything else
+- **`ANTHROPIC["base_url"]` was read but never used**, so requests meant for a
+  regional or private gateway went to the public endpoint. It is now passed to
+  the client. Leaving it unset keeps the SDK's own `ANTHROPIC_BASE_URL` lookup
+- `AUTO_SYSCHANGE` pip installs could block forever: pip's output was piped
+  and never read. The install now has a 5-minute timeout. Git calls made by
+  patch saving now have a 60-second timeout
+- The README and the `github_issue` docstring described `reference` as the
+  default `issue_detail` and said it uploaded no captured values. The default
+  is `redacted`. At `reference`, the model's analysis and the attempt ledger
+  are still included
 
 ### Added
 - **`SECURITY.md`**: private vulnerability reporting through GitHub, response
@@ -24,6 +60,18 @@ entry concerns how the project is built, released and reported on.
   tracked too, and every ecosystem waits 7 days before proposing a new release
 
 ### Changed
+- **Behaviour change:** `AUTO_SYSCHANGE` installs only a bare distribution
+  name, and for `No module named 'a.b'` it installs the top-level `a`. A
+  module name taken from an error message can no longer pass pip an option, a
+  URL or a path. Previously `a.b` was passed to pip as-is, which never named a
+  real distribution
+- **Behaviour change:** redaction fails closed. A structure nested deeper than
+  25 levels is replaced by the placeholder instead of being passed through
+  unredacted
+- **Behaviour change:** in issue and pull request bodies, the analysis and
+  ledger details are shown as plain preformatted text, not rendered Markdown.
+  The console line announcing the caught error is now value-scrubbed like the
+  ledger details (unless `REDACT_SECRETS=False`)
 - Every workflow action is pinned to a full commit SHA. Checkouts no longer
   persist the token
 - The release workflow builds in one job and publishes from another: the job
