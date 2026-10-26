@@ -178,7 +178,7 @@ pip install git+https://github.com/matebenyovszky/healing-agent
 git clone https://github.com/matebenyovszky/healing-agent && cd healing-agent && pip install -e .
 ```
 
-Anthropic and LiteLLM support are optional extras: `pip install "healing-agent[anthropic]"` or `"healing-agent[litellm]"`. Python 3.10–3.13 is supported. Note: LiteLLM currently pins OpenAI `<3`, so the LiteLLM extra resolves to the latest OpenAI 2.x.
+Anthropic and LiteLLM support are optional extras: `pip install "healing-agent[anthropic]"` or `"healing-agent[litellm]"`. Python 3.10–3.13 is supported. The Anthropic extra works with SDK 0.x, 1.x and 2.x. SDK 2.x speaks API version 2026-10-21, which accepts no `temperature`, `top_p` or `top_k`, so those settings are not sent there (a one-time warning names them); install `anthropic<2` to keep them on a model that still honours them. SDK 2.x also sends the API key as `Authorization: Bearer`, so a gateway behind `ANTHROPIC["base_url"]` must read it from there. Note: LiteLLM currently pins OpenAI `<3`, so the LiteLLM extra resolves to the latest OpenAI 2.x.
 
 ## Usage 🔧
 
@@ -469,7 +469,7 @@ Model IDs are configurable, not hardcoded. If a repaired module fails to load, t
 
 ### Sampling parameters and comparing models
 
-Every provider block takes an optional `params` dict, forwarded to that provider **verbatim** — request keyword arguments for Azure, OpenAI, Anthropic and LiteLLM, and Ollama's `options` object for local models. Nothing is validated or translated: parameter names belong to the provider. Leave it empty and the request is exactly what earlier releases sent.
+Every provider block takes an optional `params` dict, forwarded to that provider **verbatim** — request keyword arguments for Azure, OpenAI, Anthropic and LiteLLM (Anthropic's sampling parameters follow the SDK version, see Installation), and Ollama's `options` object for local models. Nothing is validated or translated: parameter names belong to the provider. Leave it empty and the request is exactly what earlier releases sent.
 
 ```python
 OLLAMA = {

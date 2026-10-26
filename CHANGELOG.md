@@ -6,12 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-Security fixes and supply-chain hardening. No configuration key, import path
-or signature changes. Three small behaviour changes are flagged under Changed.
-Each one exists only because the old behaviour leaked data or let input steer
-an action.
+Security fixes, supply-chain hardening, and the Anthropic provider working
+again on current SDKs. No configuration key, import path or signature changes.
+Four small behaviour changes are flagged under Changed. Each one exists only
+because the old behaviour leaked data, let input steer an action, or no longer
+worked at all.
 
 ### Fixed
+- **The Anthropic provider failed on every call with anthropic SDK 1.x**, which
+  the `[anthropic]` extra has resolved to since 0.4.1. SDK 1.0 removed
+  `temperature`, `top_p` and `top_k` from `messages.create()`, and the config
+  template always sets `temperature`, so each request raised `TypeError` and
+  healing gave up with the original exception. Sampling parameters now follow
+  the installed SDK: keyword arguments on 0.x, `extra_body` on 1.x (API version
+  2023-06-01 still honours them), and not sent at all on 2.x, whose API version
+  2026-10-21 rejects them with a 400. The extra now allows SDK 2.x
+  (`anthropic>=0.121.0,<3`)
+- **The Anthropic reply was read from `content[0]`**, which on current models
+  is a thinking block with no text, so a good reply raised `AttributeError`.
+  The text blocks are joined instead. A reply with no text raises an error
+  that names the stop reason, typically `max_tokens`
 - **Secrets inside containers escaped redaction.** Arguments, variable
   previews and exception attributes were turned into strings *before* the
   redaction step, and a stringified dict has no keys left to match. So
@@ -60,6 +74,11 @@ an action.
   tracked too, and every ecosystem waits 7 days before proposing a new release
 
 ### Changed
+- **Behaviour change:** `ANTHROPIC["temperature"] = 1.0`, the template's
+  value, is no longer sent: it is the API's default, so the output does not
+  change, and Claude 4.7 and later models reject the field even at that value.
+  With SDK 2.x a non-default temperature, `top_p` or `top_k` is not sent either,
+  with a one-time warning. Install `anthropic<2` to keep them
 - **Behaviour change:** `AUTO_SYSCHANGE` installs only a bare distribution
   name, and for `No module named 'a.b'` it installs the top-level `a`. A
   module name taken from an error message can no longer pass pip an option, a
