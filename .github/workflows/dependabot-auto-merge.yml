@@ -1,0 +1,27 @@
+name: Dependabot auto-merge
+
+# Patch and minor updates merge on their own once every required check on
+# main has passed; a major update waits for a human, as dependabot.yml
+# promises. "Auto" means GitHub's native auto-merge: this job only arms it,
+# so nothing merges that the main ruleset would not also let a person merge.
+
+on: pull_request
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'matebenyovszky/healing-agent'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+
+      - if: steps.metadata.outputs.update-type != 'version-update:semver-major'
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

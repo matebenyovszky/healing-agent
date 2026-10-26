@@ -496,6 +496,14 @@ Git is never required and nothing is ever committed or pushed. `GIT_MODE="patch"
 
 `AUTO_SYSCHANGE=True` pip-installs inferred missing modules with no allowlist or pinning — use only in disposable environments. It defaults to `False`.
 
+## Security and compliance 🛡️
+
+Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
+Running Healing Agent where NIS2, GDPR or the Cyber Resilience Act apply?
+[docs/security-compliance.md](docs/security-compliance.md) maps where captured
+data goes, gives a locked-down configuration profile, and lists the evidence
+for each requirement.
+
 ## Testing 🧪
 
 ```bash
