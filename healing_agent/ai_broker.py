@@ -169,6 +169,77 @@ def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
         emit(f"♣ OpenAI API error: {str(e)}")
         raise
 
+#: The sampling parameters the Claude API stopped taking. SDK 1.x removed them
+#: from the method signatures (passing one is a TypeError; the request JSON
+#: still accepts them through ``extra_body`` on API version 2023-06-01), and
+#: SDK 2.x speaks API version 2026-10-21, which answers any of them with a
+#: 400 - even at its default value.
+_ANTHROPIC_SAMPLING = ("temperature", "top_p", "top_k")
+
+#: The value a request gets when ``temperature`` is left out. Sending it is
+#: equivalent to not sending it, except that newer models reject the field.
+_ANTHROPIC_DEFAULT_TEMPERATURE = 1.0
+
+_warned_dropped_sampling = False
+
+
+def _anthropic_sdk_major(anthropic) -> int:
+    try:
+        return int(str(anthropic.__version__).split(".")[0])
+    except (AttributeError, ValueError):
+        return 0
+
+
+def _route_anthropic_sampling(request_kwargs: Dict, sdk_major: int) -> None:
+    """Send the configured sampling parameters the way the installed SDK can.
+
+    0.x takes them as keyword arguments, 1.x only through ``extra_body``, and
+    2.x not at all. A default temperature is never sent: it changes nothing,
+    and Claude 4.7 and later reject the field even at its default.
+    """
+    global _warned_dropped_sampling
+    sampling = {
+        name: request_kwargs.pop(name)
+        for name in _ANTHROPIC_SAMPLING
+        if request_kwargs.get(name) is not None
+    }
+    if sampling.get("temperature") == _ANTHROPIC_DEFAULT_TEMPERATURE:
+        del sampling["temperature"]
+    if not sampling:
+        return
+    if sdk_major == 0:
+        request_kwargs.update(sampling)
+    elif sdk_major == 1:
+        request_kwargs["extra_body"] = {**(request_kwargs.get("extra_body") or {}), **sampling}
+    elif not _warned_dropped_sampling:
+        _warned_dropped_sampling = True
+        emit(
+            f"♣ Anthropic: not sending {', '.join(sorted(sampling))} - API version "
+            "2026-10-21 (anthropic SDK 2.x) rejects sampling parameters, so the "
+            "model's defaults apply. Install anthropic<2 to keep them.",
+            level=logging.WARNING,
+        )
+
+
+def _anthropic_text(response) -> str:
+    """The reply's text, joined from its text blocks.
+
+    Newer models think by default, and a thinking block comes first, so
+    ``content[0].text`` raised AttributeError on a perfectly good reply.
+    """
+    texts = [
+        block.text for block in (getattr(response, 'content', None) or [])
+        if getattr(block, 'type', 'text') == 'text' and getattr(block, 'text', None)
+    ]
+    if not texts:
+        raise ValueError(
+            "Anthropic returned no text "
+            f"(stop_reason={getattr(response, 'stop_reason', None)}); "
+            "if it is max_tokens, raise ANTHROPIC['max_tokens']"
+        )
+    return "".join(texts)
+
+
 @handle_connection_errors("Anthropic")
 def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle Anthropic API requests"""
@@ -195,6 +266,7 @@ def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> st
         # An explicit params entry wins over the block-level shorthands above,
         # so a benchmark sweep can override temperature per run.
         request_kwargs.update(_params(config))
+        _route_anthropic_sampling(request_kwargs, _anthropic_sdk_major(anthropic))
 
         started = time.perf_counter()
         response = client.messages.create(**request_kwargs)
@@ -204,7 +276,7 @@ def _get_anthropic_response(prompt: str, config: Dict, system_prompt: str) -> st
             getattr(usage, 'input_tokens', None),
             getattr(usage, 'output_tokens', None)
         )
-        return response.content[0].text
+        return _anthropic_text(response)
     except Exception as e:
         emit(f"♣ Anthropic API error: {str(e)}")
         raise

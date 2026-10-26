@@ -163,22 +163,28 @@ def test_azure_forwards_params_as_request_kwargs(monkeypatch):
     assert captured["temperature"] == 0.0
 
 
-# --- Anthropic: params win over the block-level shorthands ------------------
+# --- Anthropic: one config, three SDK generations ----------------------------
+#
+# SDK 0.x takes sampling parameters as keyword arguments; 1.x removed them from
+# the signature (a TypeError) but still sends them through extra_body on API
+# version 2023-06-01; 2.x speaks 2026-10-21, which rejects them outright.
 
-def test_anthropic_params_override_the_temperature_shorthand(monkeypatch):
+def _anthropic_capture(monkeypatch, version, content=None):
     anthropic = pytest.importorskip("anthropic")
     captured = {}
+
+    class _Block:
+        type = "text"
+        text = "fixed code"
+
+    class _Response:
+        stop_reason = "end_turn"
+
+    _Response.content = content if content is not None else [_Block()]
 
     class _Messages:
         def create(self, **kwargs):
             captured.update(kwargs)
-
-            class _Block:
-                text = "fixed code"
-
-            class _Response:
-                content = [_Block()]
-
             return _Response()
 
     class _Client:
@@ -186,11 +192,64 @@ def test_anthropic_params_override_the_temperature_shorthand(monkeypatch):
             self.messages = _Messages()
 
     monkeypatch.setattr(anthropic, "Anthropic", _Client)
+    monkeypatch.setattr(anthropic, "__version__", version)
+    monkeypatch.setattr(ai_broker, "_warned_dropped_sampling", False)
+    return captured
 
-    ai_broker._get_anthropic_response(
-        "prompt",
-        {"api_key": "k", "model": "m", "temperature": 1.0, "params": {"temperature": 0.2}},
-        "system",
+
+def _anthropic_call(config):
+    return ai_broker._get_anthropic_response(
+        "prompt", {"api_key": "k", "model": "m", **config}, "system"
     )
 
+
+def test_anthropic_0x_params_override_the_temperature_shorthand(monkeypatch):
+    captured = _anthropic_capture(monkeypatch, "0.121.0")
+    _anthropic_call({"temperature": 1.0, "params": {"temperature": 0.2}})
     assert captured["temperature"] == 0.2
+    assert "extra_body" not in captured
+
+
+def test_anthropic_1x_sends_sampling_through_extra_body(monkeypatch):
+    captured = _anthropic_capture(monkeypatch, "1.17.0")
+    _anthropic_call({"temperature": 0.2, "params": {"top_p": 0.9}})
+    assert "temperature" not in captured and "top_p" not in captured
+    assert captured["extra_body"] == {"temperature": 0.2, "top_p": 0.9}
+
+
+def test_anthropic_2x_drops_sampling_and_says_so_once(monkeypatch):
+    captured = _anthropic_capture(monkeypatch, "2.3.0")
+    said = []
+    monkeypatch.setattr(ai_broker, "emit", lambda message, **_kw: said.append(message))
+    _anthropic_call({"temperature": 0.2})
+    _anthropic_call({"temperature": 0.2})
+    assert not {"temperature", "extra_body"} & set(captured)
+    assert sum("2026-10-21" in message for message in said) == 1
+
+
+@pytest.mark.parametrize("version", ["0.121.0", "1.17.0", "2.3.0"])
+def test_anthropic_default_temperature_is_never_sent(monkeypatch, version):
+    # The template's 1.0 is the API default, and Claude 4.7 and later reject
+    # the field even at that value.
+    captured = _anthropic_capture(monkeypatch, version)
+    _anthropic_call({"temperature": 1.0})
+    assert "temperature" not in captured and "extra_body" not in captured
+
+
+def test_anthropic_reads_the_text_past_a_thinking_block(monkeypatch):
+    class _Thinking:
+        type = "thinking"
+        thinking = ""
+
+    class _Text:
+        type = "text"
+        text = "fixed code"
+
+    _anthropic_capture(monkeypatch, "2.3.0", content=[_Thinking(), _Text()])
+    assert _anthropic_call({}) == "fixed code"
+
+
+def test_anthropic_without_text_names_the_stop_reason(monkeypatch):
+    _anthropic_capture(monkeypatch, "2.3.0", content=[])
+    with pytest.raises(ValueError, match="stop_reason"):
+        _anthropic_call({})
