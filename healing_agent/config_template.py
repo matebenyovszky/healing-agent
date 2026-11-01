@@ -78,7 +78,7 @@ OLLAMA = {
     "params": {}  # -> Ollama "options": temperature, seed, top_p, num_ctx, ...
 }
 
-# LiteLLM Configuration (DEPRECATED, removed in 1.0)
+# LiteLLM Configuration (DEPRECATED, removed in 0.7.0)
 # -------------------
 # Still works. For an OpenAI-compatible endpoint, a LiteLLM proxy included,
 # use AI_PROVIDER = "openai" with OPENAI["base_url"]: no extra install, and

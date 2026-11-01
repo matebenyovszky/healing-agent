@@ -182,7 +182,7 @@ Anthropic support is an optional extra: `pip install "healing-agent[anthropic]"`
 
 **Other providers: use their OpenAI-compatible endpoint.** OpenRouter, Groq, Mistral, Gemini's OpenAI-compatible API, vLLM, LM Studio and a LiteLLM proxy all speak the OpenAI API: set `AI_PROVIDER = "openai"` and `OPENAI["base_url"]` (or `OPENAI_BASE_URL`). No extra package is installed for it.
 
-**The `litellm` provider is deprecated** and will be removed in 1.0. It still works, and prints a one-time warning when used. The `healing-agent[litellm]` extra pulls about 40 more packages into your process, caps `openai` below 3 and `filelock` below its fixed releases, and ships the LiteLLM proxy server, whose advisories you would then have to assess in every audit. Healing Agent only ever called `litellm.completion()`, which an OpenAI-compatible endpoint replaces.
+**The `litellm` provider is deprecated** and will be removed in 0.7.0. It still works, and prints a one-time warning when used. The `healing-agent[litellm]` extra pulls about 40 more packages into your process, caps `openai` below 3 and `filelock` below its fixed releases, and ships the LiteLLM proxy server, whose advisories you would then have to assess in every audit. Healing Agent only ever called `litellm.completion()`, which an OpenAI-compatible endpoint replaces.
 
 ## Usage 🔧
 

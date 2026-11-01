@@ -193,7 +193,7 @@ def _anthropic_capture(monkeypatch, version, content=None):
 
     monkeypatch.setattr(anthropic, "Anthropic", _Client)
     monkeypatch.setattr(anthropic, "__version__", version)
-    monkeypatch.setattr(ai_broker, "_warned_dropped_sampling", False)
+    monkeypatch.setattr(ai_broker, "_warned", set())
     return captured
 
 
@@ -313,7 +313,7 @@ def test_litellm_still_works_and_warns_once(monkeypatch):
     calls = []
     fake = types.SimpleNamespace(completion=lambda **kwargs: calls.append(kwargs) or _FakeCompletion())
     monkeypatch.setitem(sys.modules, "litellm", fake)
-    monkeypatch.setattr(ai_broker, "_warned_litellm_deprecated", False)
+    monkeypatch.setattr(ai_broker, "_warned", set())
     said = []
     monkeypatch.setattr(ai_broker, "emit", lambda message, **_kw: said.append(message))
 
@@ -322,4 +322,4 @@ def test_litellm_still_works_and_warns_once(monkeypatch):
     ai_broker._get_litellm_response("prompt", config, "system")
 
     assert len(calls) == 2
-    assert sum("deprecated" in message for message in said) == 1
+    assert sum("removed in 0.7.0" in message for message in said) == 1

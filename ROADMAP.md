@@ -88,6 +88,13 @@ Next steps (each one scenario + at most a prompt/context change):
 
 ## Short term: repairs that can be trusted
 
+- [ ] **0.7.0: remove the `litellm` provider and extra** (deprecated in 0.6.0,
+      with a one-time warning). The OpenAI provider with `OPENAI["base_url"]`
+      reaches every OpenAI-compatible endpoint, a LiteLLM proxy included,
+      without putting the litellm package and its dependency caps into the
+      user's process. A config still naming `litellm` must fail with a message
+      that says what to change.
+
 *Milestone names and version numbers are deliberately separate. A version
 number follows from what a release contains (SemVer), and this milestone spans
 several minor releases — the first slice, GitHub issue escalation, ships in
@@ -395,10 +402,6 @@ after the protocol survives two independent adapters. *Acceptance: the
 coordinator repairs the same benchmark failure through two language adapters
 without language-specific branches in policy or ledger.*
 
-- [ ] **Remove the `litellm` provider and extra** (deprecated since 0.6). The
-      OpenAI provider with `OPENAI["base_url"]` reaches every
-      OpenAI-compatible endpoint, a LiteLLM proxy included, without putting
-      the litellm package and its dependency caps into the user's process.
 - [ ] **`healing-agent run script.py` — heal from the outside.** A subprocess
       runner that executes a whole program and treats its stderr as the
       failure signal, instead of requiring a decorator inside the source.
