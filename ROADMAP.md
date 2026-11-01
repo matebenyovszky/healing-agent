@@ -395,6 +395,10 @@ after the protocol survives two independent adapters. *Acceptance: the
 coordinator repairs the same benchmark failure through two language adapters
 without language-specific branches in policy or ledger.*
 
+- [ ] **Remove the `litellm` provider and extra** (deprecated since 0.6). The
+      OpenAI provider with `OPENAI["base_url"]` reaches every
+      OpenAI-compatible endpoint, a LiteLLM proxy included, without putting
+      the litellm package and its dependency caps into the user's process.
 - [ ] **`healing-agent run script.py` — heal from the outside.** A subprocess
       runner that executes a whole program and treats its stderr as the
       failure signal, instead of requiring a decorator inside the source.

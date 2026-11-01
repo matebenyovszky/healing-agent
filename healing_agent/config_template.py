@@ -5,7 +5,8 @@
 
 # AI Provider Configuration
 # -----------------------
-# Supported providers: 'azure', 'openai', 'ollama', 'litellm', 'anthropic'
+# Supported providers: 'azure', 'openai', 'ollama', 'anthropic', and the
+# deprecated 'litellm' (use 'openai' with OPENAI["base_url"] instead)
 import os
 
 # Marks the SCHEMA this file follows - which keys exist - not the version of
@@ -52,6 +53,9 @@ OPENAI = {
     # default should still be evaluated against your own repair benchmark.
     "model": os.getenv("OPENAI_MODEL", "gpt-5.6-terra"),
     "organization_id": os.getenv("OPENAI_ORG_ID", None),  # Optional
+    # Optional: any OpenAI-compatible endpoint - OpenRouter, Groq, Mistral,
+    # vLLM, LM Studio, a LiteLLM proxy. None = api.openai.com
+    "base_url": os.getenv("OPENAI_BASE_URL", None),
     "params": {}
 }
 
@@ -74,8 +78,11 @@ OLLAMA = {
     "params": {}  # -> Ollama "options": temperature, seed, top_p, num_ctx, ...
 }
 
-# LiteLLM Configuration
+# LiteLLM Configuration (DEPRECATED, removed in 1.0)
 # -------------------
+# Still works. For an OpenAI-compatible endpoint, a LiteLLM proxy included,
+# use AI_PROVIDER = "openai" with OPENAI["base_url"]: no extra install, and
+# none of the litellm package's dependency tree in your process.
 LITELLM = {
     "api_key": os.getenv("LITELLM_API_KEY", "your-litellm-key"),  # If using hosted LiteLLM
     "model": os.getenv("LITELLM_MODEL", "openai/gpt-5.6-terra"),

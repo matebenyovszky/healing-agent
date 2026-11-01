@@ -188,6 +188,9 @@ def load_config(local_config_path=None):
         if not azure_config.get('api_version'):
             azure_config['api_version'] = os.getenv('AZURE_API_VERSION') or os.getenv('AZURE_OPENAI_API_VERSION')
 
+    if 'OPENAI' in config_vars:
+        config_vars['OPENAI'].setdefault('base_url', os.getenv('OPENAI_BASE_URL'))
+
     # Check Anthropic config
     if 'ANTHROPIC' in config_vars:
         anthropic_config = config_vars['ANTHROPIC']

@@ -142,9 +142,13 @@ def _get_azure_response(prompt: str, config: Dict, system_prompt: str) -> str:
 def _get_openai_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle OpenAI direct API requests"""
     import openai
+    # base_url turns this provider into a client for any OpenAI-compatible
+    # endpoint (OpenRouter, Groq, Mistral, vLLM, LM Studio, a LiteLLM proxy).
+    # None keeps the SDK's own OPENAI_BASE_URL lookup.
     client = openai.OpenAI(
         api_key=config['api_key'],
-        organization=config.get('organization_id')
+        organization=config.get('organization_id'),
+        base_url=config.get('base_url') or None,
     )
     
     started = time.perf_counter()
@@ -315,9 +319,21 @@ def _get_ollama_response(prompt: str, config: Dict) -> str:
         emit(f"♣ Ollama API error: {str(e)}")
         raise
 
+_warned_litellm_deprecated = False
+
+
 @handle_connection_errors("LiteLLM")
 def _get_litellm_response(prompt: str, config: Dict, system_prompt: str) -> str:
-    """Handle LiteLLM API requests"""
+    """Handle LiteLLM API requests (deprecated provider; still fully working)."""
+    global _warned_litellm_deprecated
+    if not _warned_litellm_deprecated:
+        _warned_litellm_deprecated = True
+        emit(
+            "♣ The 'litellm' provider is deprecated and will be removed in 1.0. "
+            "Use AI_PROVIDER='openai' with OPENAI['base_url'] for any "
+            "OpenAI-compatible endpoint, a LiteLLM proxy included.",
+            level=logging.WARNING,
+        )
     import litellm
 
     request_kwargs = {
