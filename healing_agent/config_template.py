@@ -24,7 +24,10 @@ AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")
 #   azure / openai / litellm : request keyword arguments
 #                              e.g. {"temperature": 0.2, "seed": 7}
 #   anthropic                : request keyword arguments; overrides the
-#                              max_tokens / temperature shorthands below
+#                              max_tokens / temperature shorthands below.
+#                              temperature / top_p / top_k follow the SDK:
+#                              keyword arguments on 0.x, extra_body on 1.x,
+#                              not sent on 2.x (API 2026-10-21 rejects them)
 #   ollama                   : sent inside Ollama's "options" object
 #                              e.g. {"temperature": 0.2, "seed": 7, "num_ctx": 8192}
 # Leave it empty to send exactly what earlier releases sent (provider defaults).
