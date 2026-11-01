@@ -44,11 +44,14 @@ def test_secrets_inside_argument_containers_never_reach_the_context():
 
 
 def test_secrets_inside_local_containers_are_redacted_in_previews():
-    session = {"api_key": "sk-live-xyz", "user": "alice"}  # noqa: F841 - captured
+    # Read through the frame by capture_context(), not by name here.
+    session = {"api_key": "sk-live-xyz", "user": "alice"}
     context = exception_handler.capture_context(config={})
     preview = context["variables"]["locals"]["session"]["value_preview"]
     assert "sk-live-xyz" not in preview
-    assert "alice" in preview
+    assert session["user"] in preview
+    # Redaction works on a copy: the program's own object is untouched.
+    assert session["api_key"] == "sk-live-xyz"
 
 
 def test_redact_secrets_false_still_disables_container_redaction():
