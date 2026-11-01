@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-11-01
 Security fixes, supply-chain hardening, the Anthropic provider working again on
 current SDKs, and OpenAI-compatible endpoints in place of LiteLLM. Adds one
 optional configuration key, `OPENAI["base_url"]`, so this is a MINOR release.
-Nothing is removed or renamed. The `litellm` provider is deprecated and still
+`CONFIG_SCHEMA_VERSION` stays `0.5.0`: the key is optional, lives inside the
+`OPENAI` block and falls back to `OPENAI_BASE_URL`, so a 0.5.0 config file
+needs no change and should not be told it is outdated. Nothing is removed or
+renamed. The `litellm` provider is deprecated and still
 works. Four small behaviour changes are flagged under Changed. Each one exists
 only because the old behaviour leaked data, let input steer an action, or no
 longer worked at all.
@@ -19,6 +22,20 @@ longer worked at all.
   to any OpenAI-compatible endpoint, such as OpenRouter, Groq, Mistral,
   Gemini's OpenAI-compatible API, vLLM, LM Studio or a LiteLLM proxy. No extra
   package is needed. A config file without the key keeps working
+- **`SECURITY.md`**: private vulnerability reporting through GitHub, response
+  targets, coordinated disclosure, supported versions, and what counts as a
+  vulnerability in a library that applies generated code by design
+- **`docs/security-compliance.md`**: where captured data goes, a locked-down
+  configuration profile for regulated environments, and a mapping to NIS2
+  (Hungarian Act LXIX of 2024), GDPR and the Cyber Resilience Act
+- CI: dependency review on every PR, `pip-audit` over the fully resolved
+  dependency tree of the core install with the anthropic extra (blocking, with
+  no ignores) and of the deprecated litellm extra (informational, reported in
+  the job summary), CodeQL analysis of the workflows themselves, OpenSSF
+  Scorecard
+- Dependabot: patch and minor updates merge automatically once every required
+  check passes. Majors still wait for a human. Pre-commit hooks are now
+  tracked too, and every ecosystem waits 7 days before proposing a new release
 
 ### Deprecated
 - **The `litellm` provider and the `healing-agent[litellm]` extra**, to be
@@ -75,22 +92,6 @@ longer worked at all.
   default `issue_detail` and said it uploaded no captured values. The default
   is `redacted`. At `reference`, the model's analysis and the attempt ledger
   are still included
-
-### Added
-- **`SECURITY.md`**: private vulnerability reporting through GitHub, response
-  targets, coordinated disclosure, supported versions, and what counts as a
-  vulnerability in a library that applies generated code by design
-- **`docs/security-compliance.md`**: where captured data goes, a locked-down
-  configuration profile for regulated environments, and a mapping to NIS2
-  (Hungarian Act LXIX of 2024), GDPR and the Cyber Resilience Act
-- CI: dependency review on every PR, `pip-audit` over the fully resolved
-  dependency tree of the core install with the anthropic extra (blocking, with
-  no ignores) and of the deprecated litellm extra (informational, reported in
-  the job summary), CodeQL analysis of the workflows themselves, OpenSSF
-  Scorecard
-- Dependabot: patch and minor updates merge automatically once every required
-  check passes. Majors still wait for a human. Pre-commit hooks are now
-  tracked too, and every ecosystem waits 7 days before proposing a new release
 
 ### Changed
 - **Behaviour change:** `ANTHROPIC["temperature"] = 1.0`, the template's
