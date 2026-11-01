@@ -22,7 +22,7 @@ longer worked at all.
 
 ### Deprecated
 - **The `litellm` provider and the `healing-agent[litellm]` extra**, to be
-  removed in 1.0. Both keep working, with a one-time warning when the provider
+  removed in 0.7.0. Both keep working, with a one-time warning when the provider
   is used. The extra adds about 40 packages to the process, caps `openai`
   below 3 and `filelock` below its fixed releases (more than a dozen open
   advisories), and ships the LiteLLM proxy server and its advisory history.

@@ -184,7 +184,9 @@ _ANTHROPIC_SAMPLING = ("temperature", "top_p", "top_k")
 #: equivalent to not sending it, except that newer models reject the field.
 _ANTHROPIC_DEFAULT_TEMPERATURE = 1.0
 
-_warned_dropped_sampling = False
+#: One-time notices already given in this process, by key. A set, not one
+#: flag per notice: nothing to rebind, so no `global` statement either.
+_warned = set()
 
 
 def _anthropic_sdk_major(anthropic) -> int:
@@ -201,7 +203,6 @@ def _route_anthropic_sampling(request_kwargs: Dict, sdk_major: int) -> None:
     2.x not at all. A default temperature is never sent: it changes nothing,
     and Claude 4.7 and later reject the field even at its default.
     """
-    global _warned_dropped_sampling
     sampling = {
         name: request_kwargs.pop(name)
         for name in _ANTHROPIC_SAMPLING
@@ -215,8 +216,8 @@ def _route_anthropic_sampling(request_kwargs: Dict, sdk_major: int) -> None:
         request_kwargs.update(sampling)
     elif sdk_major == 1:
         request_kwargs["extra_body"] = {**(request_kwargs.get("extra_body") or {}), **sampling}
-    elif not _warned_dropped_sampling:
-        _warned_dropped_sampling = True
+    elif "dropped_sampling" not in _warned:
+        _warned.add("dropped_sampling")
         emit(
             f"♣ Anthropic: not sending {', '.join(sorted(sampling))} - API version "
             "2026-10-21 (anthropic SDK 2.x) rejects sampling parameters, so the "
@@ -319,17 +320,13 @@ def _get_ollama_response(prompt: str, config: Dict) -> str:
         emit(f"♣ Ollama API error: {str(e)}")
         raise
 
-_warned_litellm_deprecated = False
-
-
 @handle_connection_errors("LiteLLM")
 def _get_litellm_response(prompt: str, config: Dict, system_prompt: str) -> str:
     """Handle LiteLLM API requests (deprecated provider; still fully working)."""
-    global _warned_litellm_deprecated
-    if not _warned_litellm_deprecated:
-        _warned_litellm_deprecated = True
+    if "litellm_deprecated" not in _warned:
+        _warned.add("litellm_deprecated")
         emit(
-            "♣ The 'litellm' provider is deprecated and will be removed in 1.0. "
+            "♣ The 'litellm' provider is deprecated and will be removed in 0.7.0. "
             "Use AI_PROVIDER='openai' with OPENAI['base_url'] for any "
             "OpenAI-compatible endpoint, a LiteLLM proxy included.",
             level=logging.WARNING,
