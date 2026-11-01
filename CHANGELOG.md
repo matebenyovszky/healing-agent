@@ -6,11 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-Security fixes, supply-chain hardening, and the Anthropic provider working
-again on current SDKs. No configuration key, import path or signature changes.
-Four small behaviour changes are flagged under Changed. Each one exists only
-because the old behaviour leaked data, let input steer an action, or no longer
-worked at all.
+Security fixes, supply-chain hardening, the Anthropic provider working again on
+current SDKs, and OpenAI-compatible endpoints in place of LiteLLM. Adds one
+optional configuration key, `OPENAI["base_url"]`, so this is a MINOR release.
+Nothing is removed or renamed. The `litellm` provider is deprecated and still
+works. Four small behaviour changes are flagged under Changed. Each one exists
+only because the old behaviour leaked data, let input steer an action, or no
+longer worked at all.
+
+### Added
+- **`OPENAI["base_url"]`** (or `OPENAI_BASE_URL`): the OpenAI provider talks
+  to any OpenAI-compatible endpoint, such as OpenRouter, Groq, Mistral,
+  Gemini's OpenAI-compatible API, vLLM, LM Studio or a LiteLLM proxy. No extra
+  package is needed. A config file without the key keeps working
+
+### Deprecated
+- **The `litellm` provider and the `healing-agent[litellm]` extra**, to be
+  removed in 1.0. Both keep working, with a one-time warning when the provider
+  is used. The extra adds about 40 packages to the process, caps `openai`
+  below 3 and `filelock` below its fixed releases (more than a dozen open
+  advisories), and ships the LiteLLM proxy server and its advisory history.
+  Healing Agent only called `litellm.completion()`. Switch to
+  `AI_PROVIDER = "openai"` with `OPENAI["base_url"]`
 
 ### Fixed
 - **The Anthropic provider failed on every call with anthropic SDK 1.x**, which
@@ -67,8 +84,10 @@ worked at all.
   configuration profile for regulated environments, and a mapping to NIS2
   (Hungarian Act LXIX of 2024), GDPR and the Cyber Resilience Act
 - CI: dependency review on every PR, `pip-audit` over the fully resolved
-  dependency tree (extras included), CodeQL analysis of the workflows
-  themselves, OpenSSF Scorecard
+  dependency tree of the core install with the anthropic extra (blocking, with
+  no ignores) and of the deprecated litellm extra (informational, reported in
+  the job summary), CodeQL analysis of the workflows themselves, OpenSSF
+  Scorecard
 - Dependabot: patch and minor updates merge automatically once every required
   check passes. Majors still wait for a human. Pre-commit hooks are now
   tracked too, and every ecosystem waits 7 days before proposing a new release

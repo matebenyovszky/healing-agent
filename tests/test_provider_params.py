@@ -253,3 +253,73 @@ def test_anthropic_without_text_names_the_stop_reason(monkeypatch):
     _anthropic_capture(monkeypatch, "2.3.0", content=[])
     with pytest.raises(ValueError, match="stop_reason"):
         _anthropic_call({})
+
+
+# --- OpenAI-compatible endpoints ----------------------------------------------
+
+def test_openai_base_url_reaches_the_client(monkeypatch):
+    import openai
+    seen = {}
+
+    class _Client:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.chat = _fake_openai_client({})().chat
+
+    monkeypatch.setattr(openai, "OpenAI", _Client)
+    ai_broker._get_openai_response(
+        "prompt",
+        {"api_key": "k", "model": "m", "base_url": "https://openrouter.example/api/v1"},
+        "system",
+    )
+    assert seen["base_url"] == "https://openrouter.example/api/v1"
+
+
+def test_openai_without_base_url_leaves_the_sdk_default(monkeypatch):
+    import openai
+    seen = {}
+
+    class _Client:
+        def __init__(self, **kwargs):
+            seen.update(kwargs)
+            self.chat = _fake_openai_client({})().chat
+
+    monkeypatch.setattr(openai, "OpenAI", _Client)
+    ai_broker._get_openai_response("prompt", {"api_key": "k", "model": "m"}, "system")
+    # None, so the SDK still honours OPENAI_BASE_URL and its own default.
+    assert seen["base_url"] is None
+
+
+def test_a_config_predating_base_url_takes_it_from_the_environment(tmp_path, monkeypatch):
+    from healing_agent import config_loader
+
+    config_file = tmp_path / "healing_agent_config.py"
+    config_file.write_text(
+        'AI_PROVIDER = "openai"\n'
+        'OPENAI = {"api_key": "k", "model": "m"}\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("OPENAI_BASE_URL", "http://localhost:8000/v1")
+    config, _path = config_loader.load_config(config_file)
+    assert config["OPENAI"]["base_url"] == "http://localhost:8000/v1"
+
+
+# --- LiteLLM: deprecated, still working ----------------------------------------
+
+def test_litellm_still_works_and_warns_once(monkeypatch):
+    import sys
+    import types
+
+    calls = []
+    fake = types.SimpleNamespace(completion=lambda **kwargs: calls.append(kwargs) or _FakeCompletion())
+    monkeypatch.setitem(sys.modules, "litellm", fake)
+    monkeypatch.setattr(ai_broker, "_warned_litellm_deprecated", False)
+    said = []
+    monkeypatch.setattr(ai_broker, "emit", lambda message, **_kw: said.append(message))
+
+    config = {"api_key": "k", "model": "openai/m"}
+    assert ai_broker._get_litellm_response("prompt", config, "system") == "fixed code"
+    ai_broker._get_litellm_response("prompt", config, "system")
+
+    assert len(calls) == 2
+    assert sum("deprecated" in message for message in said) == 1
