@@ -17,7 +17,7 @@ Healing Agent is a deliberately small code-healing library: decorate a Python fu
 ## Features ✨
 
 - 🚨 Automatic error detection with rich context capture (source, args, variables, traceback)
-- 💡 AI-generated fixing hints and repaired code, multi-provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM)
+- 💡 AI-generated fixing hints and repaired code, multi-provider (Azure OpenAI, OpenAI and any OpenAI-compatible endpoint, Anthropic, Ollama)
 - 📊 **Data Healing**: adapts loaders to structurally drifted input while old inputs keep working (see below)
 - 🔎 **Observation without a failure**: `capture()` snapshots variables at any point, and an optional ring buffer feeds your own recent log records into the repair context
 - 🙋 **Ask for a repair, don't wait for a crash**: call `request_healing(reason)` from a handled error branch
@@ -162,7 +162,7 @@ Wolverine rewrote a whole script through line-numbered JSON edit operations; Hea
 
 **Not a CI healer — the inverse.** "CI went red, let an agent fix it and open a PR" is a crowded space, and coding agents are on home ground there: CI hands them a repository, a diff and a log. None of them can see the running process. Healing Agent's ground is the 02:00 scheduled job — no pull request, no reviewer, no agent watching, just an exception and the values that were in memory when it happened. CI is not what we repair, it is what we *verify against*: the repository's own test suite is the gate a runtime-derived fix has to pass ([docs/apply-verify-design.md](docs/apply-verify-design.md)).
 
-**Compared to hosted products.** [Sentry Seer Autofix](https://sentry.io/product/seer/autofix/) solves the neighbouring problem commercially, and solves it well: production telemetry in, root cause and a pull request out. It is a hosted service, though, and your errors have to reach it. Healing Agent is MIT-licensed, runs inside your own process with your own provider (Azure OpenAI, OpenAI, Anthropic, Ollama, LiteLLM), redacts secrets before anything leaves the machine, and needs no backend at all. It also sees what a telemetry pipeline cannot: the actual argument and local-variable values at the moment of the failure.
+**Compared to hosted products.** [Sentry Seer Autofix](https://sentry.io/product/seer/autofix/) solves the neighbouring problem commercially, and solves it well: production telemetry in, root cause and a pull request out. It is a hosted service, though, and your errors have to reach it. Healing Agent is MIT-licensed, runs inside your own process with your own provider (Azure OpenAI, OpenAI or any OpenAI-compatible endpoint, Anthropic, Ollama), redacts secrets before anything leaves the machine, and needs no backend at all. It also sees what a telemetry pipeline cannot: the actual argument and local-variable values at the moment of the failure.
 
 ## Installation 💻
 
@@ -178,7 +178,11 @@ pip install git+https://github.com/matebenyovszky/healing-agent
 git clone https://github.com/matebenyovszky/healing-agent && cd healing-agent && pip install -e .
 ```
 
-Anthropic and LiteLLM support are optional extras: `pip install "healing-agent[anthropic]"` or `"healing-agent[litellm]"`. Python 3.10–3.13 is supported. The Anthropic extra works with SDK 0.x, 1.x and 2.x. SDK 2.x speaks API version 2026-10-21, which accepts no `temperature`, `top_p` or `top_k`, so those settings are not sent there (a one-time warning names them); install `anthropic<2` to keep them on a model that still honours them. SDK 2.x also sends the API key as `Authorization: Bearer`, so a gateway behind `ANTHROPIC["base_url"]` must read it from there. Note: LiteLLM currently pins OpenAI `<3`, so the LiteLLM extra resolves to the latest OpenAI 2.x.
+Anthropic support is an optional extra: `pip install "healing-agent[anthropic]"`. Python 3.10–3.13 is supported. The Anthropic extra works with SDK 0.x, 1.x and 2.x. SDK 2.x speaks API version 2026-10-21, which accepts no `temperature`, `top_p` or `top_k`, so those settings are not sent there (a one-time warning names them); install `anthropic<2` to keep them on a model that still honours them. SDK 2.x also sends the API key as `Authorization: Bearer`, so a gateway behind `ANTHROPIC["base_url"]` must read it from there.
+
+**Other providers: use their OpenAI-compatible endpoint.** OpenRouter, Groq, Mistral, Gemini's OpenAI-compatible API, vLLM, LM Studio and a LiteLLM proxy all speak the OpenAI API: set `AI_PROVIDER = "openai"` and `OPENAI["base_url"]` (or `OPENAI_BASE_URL`). No extra package is installed for it.
+
+**The `litellm` provider is deprecated** and will be removed in 1.0. It still works, and prints a one-time warning when used. The `healing-agent[litellm]` extra pulls about 40 more packages into your process, caps `openai` below 3 and `filelock` below its fixed releases, and ships the LiteLLM proxy server, whose advisories you would then have to assess in every audit. Healing Agent only ever called `litellm.completion()`, which an OpenAI-compatible endpoint replaces.
 
 ## Usage 🔧
 
@@ -420,7 +424,8 @@ Configuration lives in `healing_agent_config.py` — first looked up in your pro
 Key settings:
 
 ```python
-AI_PROVIDER = "azure"     # azure | openai | anthropic | ollama | litellm
+AI_PROVIDER = "azure"     # azure | openai | anthropic | ollama | litellm (deprecated)
+OPENAI = {..., "base_url": None}  # any OpenAI-compatible endpoint, e.g. "https://openrouter.ai/api/v1"
 
 MAX_ATTEMPTS = 3          # Hard limit across recursive repair/reload attempts
 DEBUG = True              # Detailed logging
