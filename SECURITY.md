@@ -30,8 +30,8 @@ change.
 
 | Version | Supported |
 |---|---|
-| 0.5.x | ✅ |
-| < 0.5 | ❌ upgrade to 0.5.x |
+| 0.6.x | ✅ |
+| < 0.6 | ❌ upgrade to 0.6.x |
 
 ## What counts as a vulnerability
 
