@@ -304,22 +304,24 @@ def test_a_config_predating_base_url_takes_it_from_the_environment(tmp_path, mon
     assert config["OPENAI"]["base_url"] == "http://localhost:8000/v1"
 
 
-# --- LiteLLM: deprecated, still working ----------------------------------------
+# --- LiteLLM: removed in 0.7.0 ----------------------------------------------
 
-def test_litellm_still_works_and_warns_once(monkeypatch):
-    import sys
-    import types
+def test_a_config_naming_litellm_is_told_what_to_change(tmp_path):
+    from healing_agent import config_loader
 
-    calls = []
-    fake = types.SimpleNamespace(completion=lambda **kwargs: calls.append(kwargs) or _FakeCompletion())
-    monkeypatch.setitem(sys.modules, "litellm", fake)
-    monkeypatch.setattr(ai_broker, "_warned", set())
-    said = []
-    monkeypatch.setattr(ai_broker, "emit", lambda message, **_kw: said.append(message))
+    config_file = tmp_path / "healing_agent_config.py"
+    config_file.write_text(
+        'AI_PROVIDER = "litellm"\n'
+        'LITELLM = {"api_key": "k", "model": "openai/m"}\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError) as raised:
+        config_loader.load_config(config_file)
+    message = str(raised.value)
+    assert "removed in 0.7.0" in message
+    assert "AI_PROVIDER = 'openai'" in message and "base_url" in message
 
-    config = {"api_key": "k", "model": "openai/m"}
-    assert ai_broker._get_litellm_response("prompt", config, "system") == "fixed code"
-    ai_broker._get_litellm_response("prompt", config, "system")
 
-    assert len(calls) == 2
-    assert sum("removed in 0.7.0" in message for message in said) == 1
+def test_the_broker_refuses_litellm_with_the_same_guidance():
+    with pytest.raises(ValueError, match="removed in 0.7.0"):
+        ai_broker.get_ai_response("prompt", {"AI_PROVIDER": "litellm", "LITELLM": {}})

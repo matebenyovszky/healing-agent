@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+**Removes the `litellm` provider and the `healing-agent[litellm]` extra**,
+deprecated in 0.6.0, and adds `CANDIDATE_POLICY` against instructions planted
+in runtime data. Before 1.0 a removal is a MINOR release. Nothing else is
+removed or renamed.
 
 ### Added
 - **`CANDIDATE_POLICY`** (default `"strict"`): a generated repair may not add
@@ -32,6 +36,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a repair that needs a new capability of this kind is no longer applied. Set
   `CANDIDATE_POLICY = "off"` in the config, or per function with
   `@healing_agent(CANDIDATE_POLICY="off")`, to restore the 0.6 behaviour
+
+### Removed
+- **The `litellm` provider, the `LITELLM` config block and the
+  `healing-agent[litellm]` extra.** A config with `AI_PROVIDER = "litellm"`
+  now stops at load time with a message naming the replacement:
+  `AI_PROVIDER = "openai"` with `OPENAI["base_url"]` pointed at the endpoint.
+  Any OpenAI-compatible API works, a LiteLLM proxy included. Installing
+  `healing-agent[litellm]` now only gets a warning from pip that the extra
+  does not exist. Healing Agent never needed more of LiteLLM than
+  `litellm.completion()`, and the package brought about 40 dependencies,
+  caps that held `openai` and `filelock` below their fixed releases, and the
+  LiteLLM proxy server's advisory history into every installing process
+- CI: the informational `audit-litellm-extra` job. The blocking `audit` job
+  now covers every installable extra
 
 ## [0.6.0] - 2026-11-01
 Security fixes, supply-chain hardening, the Anthropic provider working again on
