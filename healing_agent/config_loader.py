@@ -311,6 +311,9 @@ def validate_config(config):
                         )
         if config.get('GIT_MODE', 'off') not in {'off', 'patch', 'apply'}:
             raise ValueError("GIT_MODE must be one of: off, patch, apply")
+
+        if str(config.get('CANDIDATE_POLICY', 'strict')).lower() not in {'strict', 'off'}:
+            raise ValueError("CANDIDATE_POLICY must be one of: strict, off")
         if config.get('GIT_PATCH_DIR') is not None and not isinstance(config.get('GIT_PATCH_DIR'), (str, os.PathLike)):
             raise ValueError("GIT_PATCH_DIR must be a path string or None")
         if config.get('LOG_MODE', 'auto') not in MODES:

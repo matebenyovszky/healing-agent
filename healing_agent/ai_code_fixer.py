@@ -5,6 +5,7 @@ from typing import Dict, Any
 from .ai_broker import get_ai_response
 from .evidence import select
 from .console import emit
+from .candidate_policy import DATA_NOTICE, as_runtime_data
 
 def ensure_healing_agent_decorator(code: str) -> str:
     """
@@ -113,7 +114,11 @@ Module: {function_info.get('module')}
 
     # A deliberate request carries intent, which an exception does not: the
     # program says what it expected, not merely where it stopped.
+    # The reason is the developer's own sentence and stays with the
+    # instructions; the details are data the program was handling (a row
+    # sample, a payload), so they travel with the runtime data.
     healing_request = ""
+    healing_details = ""
     if context.get('healing_request'):
         request = context['healing_request']
         healing_request = (
@@ -122,7 +127,7 @@ Module: {function_info.get('module')}
             f"Stated reason: {request.get('reason')}\n"
         )
         if request.get('details') is not None:
-            healing_request += f"Supporting details: {request.get('details')}\n"
+            healing_details = f"Supporting details of the repair request: {request.get('details')}\n"
         healing_request += (
             "Repair the function so this condition is handled correctly rather "
             "than re-raising the request.\n"
@@ -135,12 +140,7 @@ Module: {function_info.get('module')}
         joined = "\n".join(str(line) for line in context['recent_logs'])
         recent_logs = f"\nApplication log records leading up to the failure:\n{joined}\n"
 
-    return f"""
-Fix the following Python code that produced an error, or at least handle the exceptions, add more info that could help debugging next time:
-
-Original Code:
-{context['function_info']['source_code']}
-
+    runtime_data = f"""
 Error Type: {context['error']['type']}
 Error Message: {context['error']['message']}
 Error Line Number: {context['error'].get('line_number')}
@@ -148,7 +148,17 @@ Error Line: {context['error'].get('error_line')}
 
 {error_details}
 {traceback_info}
-{func_info}{arg_info}{state_info}{environment_info}{healing_request}{recent_logs}{ai_hint}
+{arg_info}{state_info}{environment_info}{healing_details}{recent_logs}{ai_hint}
+"""
+
+    return f"""
+Fix the following Python code that produced an error, or at least handle the exceptions, add more info that could help debugging next time:
+
+Original Code:
+{context['function_info']['source_code']}
+{func_info}{healing_request}
+{DATA_NOTICE}
+{as_runtime_data(runtime_data)}
 
 Return only the fixed code without any explanations or markdown formatting.
 Return exactly ONE top-level function definition. Place any imports and helper functions INSIDE the function body, never at module level.
