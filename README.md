@@ -182,7 +182,7 @@ Anthropic support is an optional extra: `pip install "healing-agent[anthropic]"`
 
 **Other providers: use their OpenAI-compatible endpoint.** OpenRouter, Groq, Mistral, Gemini's OpenAI-compatible API, vLLM, LM Studio and a LiteLLM proxy all speak the OpenAI API: set `AI_PROVIDER = "openai"` and `OPENAI["base_url"]` (or `OPENAI_BASE_URL`). No extra package is installed for it.
 
-**The `litellm` provider is deprecated** and will be removed in 0.7.0. It still works, and prints a one-time warning when used. The `healing-agent[litellm]` extra pulls about 40 more packages into your process, caps `openai` below 3 and `filelock` below its fixed releases, and ships the LiteLLM proxy server, whose advisories you would then have to assess in every audit. Healing Agent only ever called `litellm.completion()`, which an OpenAI-compatible endpoint replaces.
+**The `litellm` provider was removed in 0.7.0** (deprecated in 0.6.0). A config that still names it stops with a message saying what to change. If you run a LiteLLM proxy, point `OPENAI["base_url"]` at it. The library itself is no longer pulled into your process.
 
 ## Usage 🔧
 
@@ -424,7 +424,7 @@ Configuration lives in `healing_agent_config.py` — first looked up in your pro
 Key settings:
 
 ```python
-AI_PROVIDER = "azure"     # azure | openai | anthropic | ollama | litellm (deprecated)
+AI_PROVIDER = "azure"     # azure | openai | anthropic | ollama
 OPENAI = {..., "base_url": None}  # any OpenAI-compatible endpoint, e.g. "https://openrouter.ai/api/v1"
 
 MAX_ATTEMPTS = 3          # Hard limit across recursive repair/reload attempts
@@ -474,7 +474,7 @@ Model IDs are configurable, not hardcoded. If a repaired module fails to load, t
 
 ### Sampling parameters and comparing models
 
-Every provider block takes an optional `params` dict, forwarded to that provider **verbatim** — request keyword arguments for Azure, OpenAI, Anthropic and LiteLLM (Anthropic's sampling parameters follow the SDK version, see Installation), and Ollama's `options` object for local models. Nothing is validated or translated: parameter names belong to the provider. Leave it empty and the request is exactly what earlier releases sent.
+Every provider block takes an optional `params` dict, forwarded to that provider **verbatim** — request keyword arguments for Azure, OpenAI and Anthropic (Anthropic's sampling parameters follow the SDK version, see Installation), and Ollama's `options` object for local models. Nothing is validated or translated: parameter names belong to the provider. Leave it empty and the request is exactly what earlier releases sent.
 
 ```python
 OLLAMA = {

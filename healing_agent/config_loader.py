@@ -215,7 +215,10 @@ def validate_config(config):
         if 'AI_PROVIDER' not in config:
             raise ValueError("AI_PROVIDER must be defined in config")
             
-        valid_providers = ['azure', 'openai', 'ollama', 'litellm', 'anthropic']
+        if config['AI_PROVIDER'] == 'litellm':
+            from .ai_broker import LITELLM_REMOVED
+            raise ValueError(LITELLM_REMOVED)
+        valid_providers = ['azure', 'openai', 'ollama', 'anthropic']
         if config['AI_PROVIDER'] not in valid_providers:
             raise ValueError(f"♣ Invalid AI provider: {config['AI_PROVIDER']}. Must be one of: {', '.join(valid_providers)}")
             

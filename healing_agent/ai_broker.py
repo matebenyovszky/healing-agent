@@ -20,7 +20,7 @@ def _openai_connection_error():
 
     The openai package is only needed by the azure and openai providers, so it
     is imported where it is used rather than at module import: an Ollama-only
-    or LiteLLM-only install should not fail because a package it never calls is
+    or Anthropic-only install should not fail because a package it never calls is
     missing.
     """
     try:
@@ -320,55 +320,13 @@ def _get_ollama_response(prompt: str, config: Dict) -> str:
         emit(f"♣ Ollama API error: {str(e)}")
         raise
 
-@handle_connection_errors("LiteLLM")
-def _get_litellm_response(prompt: str, config: Dict, system_prompt: str) -> str:
-    """Handle LiteLLM API requests (deprecated provider; still fully working)."""
-    if "litellm_deprecated" not in _warned:
-        _warned.add("litellm_deprecated")
-        emit(
-            "♣ The 'litellm' provider is deprecated and will be removed in 0.7.0. "
-            "Use AI_PROVIDER='openai' with OPENAI['base_url'] for any "
-            "OpenAI-compatible endpoint, a LiteLLM proxy included.",
-            level=logging.WARNING,
-        )
-    import litellm
+#: Shown wherever a configuration still names the provider removed in 0.7.0.
+LITELLM_REMOVED = (
+    "The 'litellm' provider was removed in 0.7.0. Set AI_PROVIDER = 'openai' "
+    "and OPENAI['base_url'] to your endpoint: any OpenAI-compatible API works, "
+    "a LiteLLM proxy included (e.g. 'http://localhost:4000')."
+)
 
-    request_kwargs = {
-        "model": config['model'],
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": prompt}
-        ],
-        "api_key": config['api_key'],
-        "timeout": config.get('timeout', 30),
-    }
-    # Per call, never `litellm.api_base = ...`: that is module-global state,
-    # so it outlived this call and applied to every later one — including
-    # calls made by other code sharing the process.
-    if config.get('api_base'):
-        request_kwargs["api_base"] = config['api_base']
-    request_kwargs.update(_params(config))
-
-    started = time.perf_counter()
-    try:
-        response = litellm.completion(**request_kwargs)
-        usage = getattr(response, 'usage', None)
-        _record_usage(
-            'litellm', config.get('model'), started,
-            getattr(usage, 'prompt_tokens', None),
-            getattr(usage, 'completion_tokens', None)
-        )
-        if not response or not response.choices:
-            raise ValueError("Invalid response from LiteLLM API - no choices returned")
-            
-        if not response.choices[0].message or not response.choices[0].message.content:
-            raise ValueError("Invalid response format - missing message content")
-            
-        return response.choices[0].message.content.strip()
-        
-    except Exception as e:
-        emit(f"♣ LiteLLM API error: {str(e)}")
-        raise
 
 def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") -> str:
     """
@@ -407,7 +365,7 @@ def get_ai_response(prompt: str, config: Dict, system_role: str = "code_fixer") 
         elif provider == 'ollama':
             return _get_ollama_response(prompt, config['OLLAMA'])
         elif provider == 'litellm':
-            return _get_litellm_response(prompt, config['LITELLM'], system_prompt)
+            raise ValueError(LITELLM_REMOVED)
         else:
             raise ValueError(f"Unsupported AI provider: {provider}")
             
