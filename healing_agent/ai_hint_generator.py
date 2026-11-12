@@ -1,5 +1,6 @@
 from typing import Dict, Any
 from .ai_broker import get_ai_response
+from .candidate_policy import DATA_NOTICE, as_runtime_data
 from .evidence import select
 
 def generate_hint(context: Dict[str, Any], config: Dict[str, Any]) -> str:
@@ -81,22 +82,10 @@ def generate_hint(context: Dict[str, Any], config: Dict[str, Any]) -> str:
         joined = "\n".join(str(line) for line in context['recent_logs'])
         recent_logs = f"\nApplication log records leading up to the failure:\n{joined}"
     
-    # Prepare the prompt for AI
-    prompt = f"""
-An exception occurred in a Python program:
-
-ENVIRONMENT:
-Python Version: {python_version}
-Platform: {platform}
-
+    runtime_data = f"""
 ERROR DETAILS:
 Error Type: {error_type}
 Error Message: {error_message}
-Function Name: {function_name}
-Module: {function_module}
-
-Source Code:
-{function_source}
 
 Function Arguments:
 {function_arguments}
@@ -113,6 +102,24 @@ Detailed Traceback Frames:
 Additional Error Details:
 {error_details}
 {healing_request}{recent_logs}
+"""
+
+    # Prepare the prompt for AI
+    prompt = f"""
+An exception occurred in a Python program:
+
+ENVIRONMENT:
+Python Version: {python_version}
+Platform: {platform}
+
+Function Name: {function_name}
+Module: {function_module}
+
+Source Code:
+{function_source}
+
+{DATA_NOTICE}
+{as_runtime_data(runtime_data)}
 
 Based on all the provided context, generate a helpful hint or suggestion for resolving the issue. Consider:
 1. The exact error type and message
