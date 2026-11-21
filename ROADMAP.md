@@ -88,7 +88,7 @@ Next steps (each one scenario + at most a prompt/context change):
 
 ## Short term: repairs that can be trusted
 
-- [ ] **0.7.0: remove the `litellm` provider and extra** (deprecated in 0.6.0,
+- [x] **0.7.0: remove the `litellm` provider and extra** (deprecated in 0.6.0,
       with a one-time warning). The OpenAI provider with `OPENAI["base_url"]`
       reaches every OpenAI-compatible endpoint, a LiteLLM proxy included,
       without putting the litellm package and its dependency caps into the

@@ -5,8 +5,9 @@
 
 # AI Provider Configuration
 # -----------------------
-# Supported providers: 'azure', 'openai', 'ollama', 'anthropic', and the
-# deprecated 'litellm' (use 'openai' with OPENAI["base_url"] instead)
+# Supported providers: 'azure', 'openai', 'ollama', 'anthropic'. For any other
+# OpenAI-compatible endpoint (a LiteLLM proxy included) use 'openai' with
+# OPENAI["base_url"].
 import os
 
 # Marks the SCHEMA this file follows - which keys exist - not the version of
@@ -22,7 +23,7 @@ AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")
 # Every provider block below accepts an optional "params" dict. Its contents
 # are forwarded to that provider VERBATIM — Healing Agent neither validates nor
 # translates them, because the provider owns its own parameter names.
-#   azure / openai / litellm : request keyword arguments
+#   azure / openai           : request keyword arguments
 #                              e.g. {"temperature": 0.2, "seed": 7}
 #   anthropic                : request keyword arguments; overrides the
 #                              max_tokens / temperature shorthands below.
@@ -76,18 +77,6 @@ OLLAMA = {
     "model": os.getenv("OLLAMA_MODEL", "llama3"),  # or codellama, mistral etc.
     "timeout": int(os.getenv("OLLAMA_TIMEOUT", "120")),  # Request timeout in seconds
     "params": {}  # -> Ollama "options": temperature, seed, top_p, num_ctx, ...
-}
-
-# LiteLLM Configuration (DEPRECATED, removed in 0.7.0)
-# -------------------
-# Still works. For an OpenAI-compatible endpoint, a LiteLLM proxy included,
-# use AI_PROVIDER = "openai" with OPENAI["base_url"]: no extra install, and
-# none of the litellm package's dependency tree in your process.
-LITELLM = {
-    "api_key": os.getenv("LITELLM_API_KEY", "your-litellm-key"),  # If using hosted LiteLLM
-    "model": os.getenv("LITELLM_MODEL", "openai/gpt-5.6-terra"),
-    "api_base": os.getenv("LITELLM_API_BASE", None),  # Optional custom API base URL
-    "params": {}
 }
 
 # Healing Agent Behavior Configuration
