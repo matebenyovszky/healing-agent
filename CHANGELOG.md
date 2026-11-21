@@ -5,11 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-11-21
 **Removes the `litellm` provider and the `healing-agent[litellm]` extra**,
 deprecated in 0.6.0, and adds `CANDIDATE_POLICY` against instructions planted
 in runtime data. Before 1.0 a removal is a MINOR release. Nothing else is
-removed or renamed.
+removed or renamed. `CONFIG_SCHEMA_VERSION` moves to `0.7.0`: `CANDIDATE_POLICY`
+is a new setting and `LITELLM` is gone. An older config file keeps working, is
+completed from the template on load, and gets a one-time notice naming the
+new key.
 
 ### Added
 - **`CANDIDATE_POLICY`** (default `"strict"`): a generated repair may not add
