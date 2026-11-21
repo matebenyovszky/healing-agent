@@ -1,0 +1,26 @@
+# What CI and the release build install, before the project itself goes in
+# with `pip install --no-deps -e .`. Compiled to ci.txt with exact versions
+# and hashes, so a CI run installs bytes that were reviewed in a PR rather
+# than whatever the index serves that minute. `pip check` afterwards proves
+# the locked versions satisfy pyproject.toml's ranges.
+#
+# Regenerate after editing this file (Dependabot's uv ecosystem keeps ci.txt
+# current otherwise):
+#   uv pip compile requirements/ci.in --universal --python-version 3.10 --generate-hashes -o requirements/ci.txt
+
+# runtime dependencies (pyproject.toml [project.dependencies])
+openai
+httpx
+requests
+# the anthropic extra, so its tests run and its tree is audited
+anthropic
+# the dev extra
+build
+hatchling
+pytest
+ruff
+twine
+# CI tooling
+pip
+pip-audit
+uv

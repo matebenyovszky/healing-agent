@@ -4,9 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Weekly, so an advisory published against an unchanged dependency tree
+    # still turns the audit red without waiting for the next commit.
+    - cron: "41 5 * * 1"
 
 permissions:
   contents: read
+
+# Every job installs requirements/ci.txt with --require-hashes: exact
+# versions whose hashes were reviewed in a pull request, not whatever the
+# index serves at that minute. The project itself then goes in with
+# --no-deps, so nothing unpinned rides along, and `pip check` proves the
+# locked versions satisfy pyproject.toml's ranges.
 
 jobs:
   lint:
@@ -19,8 +29,9 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+          cache-dependency-path: requirements/ci.txt
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m pip install --no-deps -e .
       # Rule selection lives in pyproject.toml: defect-hunting rules only, no
       # style opinions, so a failure here always means something real.
       - run: python -m ruff check .
@@ -40,8 +51,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+          cache-dependency-path: requirements/ci.txt
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m pip install --no-deps -e .
+      - run: python -m pip check
       - run: python -m pytest
 
   package:
@@ -53,12 +66,12 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: python -m pip install --upgrade pip build twine
-      - run: python -m build
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      # --no-isolation builds with the locked hatchling; an isolated build
+      # would fetch an unpinned one from the index.
+      - run: python -m build --no-isolation
       - run: python -m twine check dist/*
 
-  # Dependabot alerts only see what pyproject.toml declares; this sees the
-  # whole resolved tree, extras included, which is what a user installs.
   audit:
     runs-on: ubuntu-latest
     steps:
@@ -68,8 +81,17 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: python -m pip install --upgrade pip pip-audit
-      # What a user gets from `pip install healing-agent[anthropic]`: no
-      # ignores, so any known vulnerability here fails the job.
-      - run: python -m pip install ".[anthropic]"
-      - run: python -m pip_audit --skip-editable --progress-spinner off
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      # 1. The locked tree that CI and the release build run.
+      - run: >
+          python -m pip_audit --progress-spinner off
+          --disable-pip --require-hashes -r requirements/ci.txt
+      # 2. What a user gets from `pip install healing-agent[anthropic]` today:
+      #    the newest versions pyproject.toml allows, resolved but not
+      #    installed. No ignores either way, so any known vulnerability fails.
+      - run: >
+          python -m uv pip compile pyproject.toml --extra anthropic
+          --python-version 3.13 --generate-hashes -o "$RUNNER_TEMP/latest.txt"
+      - run: >
+          python -m pip_audit --progress-spinner off
+          --disable-pip --require-hashes -r "$RUNNER_TEMP/latest.txt"
