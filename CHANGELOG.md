@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **`CANDIDATE_POLICY`** (default `"strict"`): a generated repair may not add
+  a capability the function it replaces did not already use. This covers
+  starting processes, sockets and HTTP clients, `eval`/`exec`/`compile`,
+  `__import__`/`importlib`, `pickle`/`marshal`, `ctypes`, deleting files or
+  trees, and reaching builtins dynamically. The model's input is the failing
+  program's data (exception messages, HTTP bodies, CSV headers, log lines),
+  and whoever writes that data can write instructions into it. With
+  `AUTO_FIX=True` an obeyed instruction used to be written into the source and
+  run. A refused candidate is recorded like a rejected verify gate and the
+  source is not touched. It is a tripwire, not a sandbox. `VERIFY_COMMAND`,
+  `AUTO_FIX=False` and PR delivery remain the controls that do not depend on
+  recognising anything
+- **Runtime data is framed in both prompts.** The error message, arguments,
+  variables, environment, traceback, response bodies, log records, the
+  details of a repair request and the analysis derived from them go inside one
+  `<runtime_data>` frame. The model is told to use it as evidence, never as
+  instructions. A closing tag inside the data is defused. The program's own
+  source code and the developer's stated repair reason stay outside the frame
+
+### Changed
+- **Behaviour change (opt-out available):** with `CANDIDATE_POLICY="strict"`,
+  a repair that needs a new capability of this kind is no longer applied. Set
+  `CANDIDATE_POLICY = "off"` in the config, or per function with
+  `@healing_agent(CANDIDATE_POLICY="off")`, to restore the 0.6 behaviour
+
 ## [0.6.0] - 2026-11-01
 Security fixes, supply-chain hardening, the Anthropic provider working again on
 current SDKs, and OpenAI-compatible endpoints in place of LiteLLM. Adds one

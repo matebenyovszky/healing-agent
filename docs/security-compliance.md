@@ -43,6 +43,7 @@ argued for in the risk assessment.
 | `AUTO_FIX` | `False` | Proposal only. A generated repair is saved and reported but never applied to running code. Change management stays with people |
 | `GITHUB["pull_request"]` | `"draft"`, if repairs should be applied at all | A repair reaches production through your normal review and CI, with the attempt ledger as the description |
 | `VERIFY_COMMAND` | your checker | If `AUTO_FIX=True`, nothing is applied that a deterministic check did not accept first |
+| `CANDIDATE_POLICY` | `"strict"` (default) | A repair cannot add process, network, `eval`/`exec`, dynamic-import, `pickle` or file-deletion capability that the function did not already have. This is a defence against instructions planted in the data the model reads |
 | `AUTO_SYSCHANGE` | `False` (default) | Never install packages from a running process |
 | `REDACT_SECRETS` | `True` (default) | Never disable |
 | `REDACT_EXTRA_PATTERNS` | your secret and personal-data field names | Extends the built-in name list |

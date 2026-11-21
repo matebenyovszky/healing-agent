@@ -22,6 +22,7 @@ from .request import HealingRequested
 from .console import emit
 from . import attempt_ledger
 from .verify_gate import verify_candidate
+from .candidate_policy import check_candidate
 from . import usage_ledger
 
 
@@ -521,6 +522,18 @@ async def _attempt_healing(
     if config.get("DEBUG"):
         emit(f"♣ Attempting to update file: {context['error']['file']}")
         emit(f"♣ Replacing function: {context['error']['function_name']}")
+
+    # Before any configured gate, and before the source is touched: a repair
+    # may not gain a capability (a process, a socket, eval, ...) the function
+    # did not already use. The model's input is the program's data, and data
+    # can carry instructions.
+    refusal = check_candidate(
+        context["function_info"].get("source_code") or "", fixed_code, config
+    )
+    if refusal:
+        emit(f"♣ {refusal}", level=logging.WARNING)
+        _record_attempt(attempt_number, "gate_rejected", candidate=fixed_code, detail=refusal)
+        return False, None
 
     gate_report: Dict[str, Any] = {}
     if not verify_candidate(context, fixed_code, config, gate_report):

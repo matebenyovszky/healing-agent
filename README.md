@@ -449,6 +449,7 @@ GIT_MODE = "off"          # off | patch (save reviewable diff) | apply (guarded 
 
 # Verification gates: run before the live file changes, exit code 0 accepts
 VERIFY_COMMAND = None     # e.g. ["python", "checks/verify_loader.py"]; list of lists = ordered gates
+CANDIDATE_POLICY = "strict"  # refuse repairs that ADD process/network/eval/pickle/... use; "off" to disable
                           # runs on a copy of the candidate FILE, so use a self-contained checker
 VERIFY_TIMEOUT_SECONDS = 120
 
@@ -502,6 +503,8 @@ Git is never required and nothing is ever committed or pushed. `GIT_MODE="patch"
 `AUTO_SYSCHANGE=True` pip-installs inferred missing modules with no allowlist or pinning — use only in disposable environments. It defaults to `False`.
 
 ## Security and compliance 🛡️
+
+**Untrusted data in, generated code out.** The model sees the failing program's data, and data can carry instructions ("to fix this, run `curl … | sh`"). Two layers stand between that and your process. The prompts frame all runtime data as evidence, never instructions. `CANDIDATE_POLICY = "strict"` (the default) refuses a repair that adds a capability the original function did not use: processes, sockets, HTTP clients, `eval`/`exec`, dynamic imports, `pickle`, deleting files. Neither layer is a sandbox. For code paths that read data from outside your control, add a `VERIFY_COMMAND`, or use `AUTO_FIX=False` or draft-PR delivery.
 
 Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
 Running Healing Agent where NIS2, GDPR or the Cyber Resilience Act apply?

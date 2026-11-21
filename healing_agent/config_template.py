@@ -142,6 +142,20 @@ GIT_STAGE = False  # If GIT_MODE="apply", also stage the applied file
 VERIFY_COMMAND = None
 VERIFY_TIMEOUT_SECONDS = 120
 
+# Candidate policy
+# ----------------
+# The model is shown the failing program's data (messages, arguments, HTTP
+# bodies, log lines), and data can carry instructions. "strict" refuses a
+# repair that ADDS a capability the original function did not use: starting
+# processes, sockets and HTTP clients, eval/exec, dynamic imports, pickle,
+# deleting files or trees, reaching builtins dynamically. A function that
+# already used one keeps it. Refusals are recorded like a rejected gate.
+# It is a tripwire, not a sandbox - VERIFY_COMMAND, AUTO_FIX=False or PR
+# delivery remain the controls that do not depend on recognising anything.
+#   "strict" (default) | "off" (no check, the 0.6 behaviour)
+# Per function: @healing_agent(CANDIDATE_POLICY="off")
+CANDIDATE_POLICY = "strict"
+
 # GitHub Integration
 # ------------------
 # Escalation for failures healing could not repair: an issue in your own
