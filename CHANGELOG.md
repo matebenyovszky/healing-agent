@@ -36,6 +36,14 @@ removed or renamed.
   a repair that needs a new capability of this kind is no longer applied. Set
   `CANDIDATE_POLICY = "off"` in the config, or per function with
   `@healing_agent(CANDIDATE_POLICY="off")`, to restore the 0.6 behaviour
+- CI and the release build install their tools from `requirements/ci.txt`, a
+  hash-locked file compiled with `uv pip compile --universal`, and then the
+  project with `--no-deps`. `pip check` confirms the locked versions satisfy
+  `pyproject.toml`. The release wheel is built with `--no-isolation` from the
+  locked `hatchling` instead of an unpinned one fetched at build time. The
+  audit job checks both the locked tree and what a user would install today,
+  and CI now also runs weekly so new advisories surface without a commit.
+  Dependabot keeps the lock current through its `uv` ecosystem
 
 ### Removed
 - **The `litellm` provider, the `LITELLM` config block and the

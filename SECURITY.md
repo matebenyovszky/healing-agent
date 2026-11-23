@@ -59,6 +59,9 @@ is the design, not a vulnerability. These are vulnerabilities:
 - Workflow actions are pinned to commit SHAs; Dependabot proposes updates
   after a cooldown, and only patch and minor updates merge automatically once
   every required check passes.
+- CI and the release build install their tools from a hash-locked
+  requirements file and build the wheel with that locked backend, so a
+  release contains only bytes that were reviewed in a pull request.
 - Every change is scanned by CodeQL (Python and the workflows themselves),
   gitleaks over the full history, GitHub secret scanning with push protection,
   dependency review and `pip-audit` over the resolved dependency tree.

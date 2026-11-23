@@ -33,6 +33,23 @@ updates:
         dependency-type: development
         patterns: ["*"]
 
+  # requirements/ci.txt: the hash-locked tools CI and the release build
+  # install. It was compiled with `uv pip compile --universal`, which only the
+  # uv ecosystem replays faithfully (the pip ecosystem's pip-compile would
+  # drop the Python-version-gated pins). Being a lock, every bump is grouped
+  # and arrives as one reviewed PR with new hashes.
+  - package-ecosystem: uv
+    directory: "/requirements"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      ci-lock:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
+
   # The local secret-scanning hooks drift silently otherwise.
   - package-ecosystem: pre-commit
     directory: "/"

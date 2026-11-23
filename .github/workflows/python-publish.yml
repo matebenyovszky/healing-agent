@@ -23,15 +23,20 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
       with:
-        python-version: '3.x'
+        python-version: '3.13'  # the version CI's lint, package and audit jobs use
+    # Hash-locked tools, then the project with --no-deps, exactly as in CI:
+    # the release is built only from bytes that were reviewed in a PR.
     - name: Install build tools
       run: |
-        python -m pip install --upgrade pip
-        pip install -e ".[dev]"
+        python -m pip install --require-hashes -r requirements/ci.txt
+        python -m pip install --no-deps -e .
+        python -m pip check
     - name: Run tests
       run: python -m pytest
+    # --no-isolation builds with the locked hatchling; an isolated build
+    # would fetch an unpinned one from the index.
     - name: Build package
-      run: python -m build
+      run: python -m build --no-isolation
     - name: Check package metadata
       run: python -m twine check dist/*
     - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
