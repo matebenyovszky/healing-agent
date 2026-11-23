@@ -22,5 +22,8 @@ ruff
 twine
 # CI tooling
 pip
-pip-audit
+# Only the audit job (3.13) runs it. On 3.10 its cachecontrol -> filelock
+# chain would resolve to a filelock older than every fixed release, because
+# the fixed ones need 3.11; no job on 3.10 needs any of it.
+pip-audit ; python_version >= "3.11"
 uv

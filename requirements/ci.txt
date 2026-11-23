@@ -20,7 +20,7 @@ backports-tarfile==1.2.0 ; python_full_version < '3.12' and platform_machine != 
     --hash=sha256:77e284d754527b01fb1e6fa8a1afe577858ebe4e9dad8919e34c862cb399bc34 \
     --hash=sha256:d75e02c268746e1b8144c278978b6e98e85de6ad16f8e4b0844a154557eca991
     # via jaraco-context
-boolean-py==5.0 \
+boolean-py==5.0 ; python_full_version >= '3.11' \
     --hash=sha256:60cbc4bad079753721d32649545505362c754e121570ada4658b852a3a318d95 \
     --hash=sha256:ef28a70bd43115208441b53a045d1549e2f0ec6e3d08a9d142cbc41c1938e8d9
     # via license-expression
@@ -28,7 +28,7 @@ build==1.6.1 \
     --hash=sha256:51cc11666391ab6f092070437ac747002ff46f3e4113a3622177ee6b488bfc53 \
     --hash=sha256:ecd351a4be9d35a9eaaba244a7687143c9c7d4aea6ac964e7e7ddab20cbcf4e7
     # via -r requirements/ci.in
-cachecontrol==0.15.0 \
+cachecontrol==0.15.0 ; python_full_version >= '3.11' \
     --hash=sha256:10b7ab4387355ad9361d5b89bc0f6758e48099017be173241c4e0f20d9e1dad2 \
     --hash=sha256:52157b539eb64d85c8c793660e86cf05cf95fad7b98c8ef6846e4a0ddffdb193
     # via pip-audit
@@ -382,11 +382,11 @@ cryptography==50.0.2 ; platform_machine != 'ppc64le' and platform_machine != 's3
     --hash=sha256:fa8f5efb344d6908a1ce62f4a24e2e5780f825d6f53f5f50ec5ffacac72936cb \
     --hash=sha256:fdd28f912fccfec1846a94e2e1e8f9b0012f557f0c46fe4f3eb0d7a87afcf90b
     # via secretstorage
-cyclonedx-python-lib==11.12.0 \
+cyclonedx-python-lib==11.12.0 ; python_full_version >= '3.11' \
     --hash=sha256:0e807521a921a5c3cb8ce1153f8a61d29eedfe76a46aac2796b7c6b573391a54 \
     --hash=sha256:16767c4039de90c04e9f03348f8f0ed4b8ff842eaa7eefcad3a95685f970dacf
     # via pip-audit
-defusedxml==0.7.1 \
+defusedxml==0.7.1 ; python_full_version >= '3.11' \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
     # via py-serializable
@@ -404,10 +404,6 @@ exceptiongroup==1.3.2 ; python_full_version < '3.11' \
     # via
     #   anyio
     #   pytest
-filelock==4.1.0 ; python_full_version < '3.11' \
-    --hash=sha256:2ce9818e3e2d8f284c1a964414447ef148d42a5fd5e2a477a7118e574b293ec1 \
-    --hash=sha256:ad7f724afef953e731b1cc39bcd3a09166d72ed7fcdf29e6e88b1c3235c6715d
-    # via cachecontrol
 filelock==4.2.12 ; python_full_version >= '3.11' \
     --hash=sha256:21decfec02f116ed4c954433cdb31f28c3b346b784543177b6d7059da2702ee9 \
     --hash=sha256:7e7da24d3ac39268b0f156e56870001de44886318f092f9d851e692f7114d6dd
@@ -475,9 +471,7 @@ importlib-metadata==9.0.1 ; python_full_version < '3.10.2' or (python_full_versi
 importlib-metadata==10.2.0 ; python_full_version == '3.11.*' and platform_machine != 'ppc64le' and platform_machine != 's390x' \
     --hash=sha256:9413a2029fd9ca5669d27f1386071bbfe3c7ebca0545692ec975088241fe1d79 \
     --hash=sha256:c7a4bf1c7479601f6b8e437cfc14f4f77028ba62a8f34ae95cd93d9774dfba51
-    # via
-    #   build
-    #   keyring
+    # via keyring
 iniconfig==2.3.1 \
     --hash=sha256:67f4b9c50da0dedf52af349e7749a80a9057a5031199791b906c3bb3ae878960 \
     --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
@@ -740,7 +734,7 @@ lazy-importer==0.1.0 ; python_full_version == '3.11.*' and platform_machine != '
     --hash=sha256:b2e296716ce015c0cd80e57b940e52727c5b934b34b8656d5ce06bdd0ee5fbdd \
     --hash=sha256:bd93fab7bef18e842eea02b839410954d37889140dc64ca4d9680aec6880c739
     # via importlib-metadata
-license-expression==30.4.4 \
+license-expression==30.4.4 ; python_full_version >= '3.11' \
     --hash=sha256:421788fdcadb41f049d2dc934ce666626265aeccefddd25e162a26f23bcbf8a4 \
     --hash=sha256:73448f0aacd8d0808895bdc4b2c8e01a8d67646e4188f887375398c761f340fd
     # via cyclonedx-python-lib
@@ -764,7 +758,7 @@ more-itertools==11.2.1 ; python_full_version >= '3.11' and platform_machine != '
     # via
     #   jaraco-classes
     #   jaraco-functools
-msgpack==1.2.4 \
+msgpack==1.2.4 ; python_full_version >= '3.11' \
     --hash=sha256:0221748c30ace75fde0dec8c470abe65fb5374cd4f37adb9db6aca7a3c362c0a \
     --hash=sha256:0626ea840cce866237c4da08439e9faa9cf79e6e4c62358978ee055961e8cff2 \
     --hash=sha256:06a0657a4110d563255006b7cb7147432f67827144e429c2cdb1c967548d1817 \
@@ -919,7 +913,7 @@ opentelemetry-api==1.45.2 \
     --hash=sha256:2cbd737377e710ee740d261c94e93fa0f08e6d037c18f17513cc0a2d94479a34 \
     --hash=sha256:d7b0008e21e5fd61cbe7a7f34ca3b6905a78ab677d9bc395e299359c75cda6b4
     # via anthropic
-packageurl-python==0.17.6 \
+packageurl-python==0.17.6 ; python_full_version >= '3.11' \
     --hash=sha256:1252ce3a102372ca6f86eb968e16f9014c4ba511c5c37d95a7f023e2ca6e5c25 \
     --hash=sha256:31a85c2717bc41dd818f3c62908685ff9eebcb68588213745b14a6ee9e7df7c9
     # via cyclonedx-python-lib
@@ -943,21 +937,17 @@ pip==26.3 \
     # via
     #   -r requirements/ci.in
     #   pip-api
-pip-api==0.0.35 \
+pip-api==0.0.35 ; python_full_version >= '3.11' \
     --hash=sha256:14dea05d7b3b68f4c7582213e3ae8932bbba8e1f754bf06b95263d5fa6ab4363 \
     --hash=sha256:66990d0da25378555cbb538db79384bab92d4617c6350dfd7a2126ba2a3a9894
     # via pip-audit
-pip-audit==2.10.1 \
+pip-audit==2.10.1 ; python_full_version >= '3.11' \
     --hash=sha256:1eb4565d19ebe5d48996f4b770b4d2b32887e12cb12cfa637f1a064011b55ffc \
     --hash=sha256:99ef3f600a317c1945f1e89e227ef26e1c2d618429b8bd3fa6f4f7c440c4611a
     # via -r requirements/ci.in
-pip-requirements-parser==32.0.1 \
+pip-requirements-parser==32.0.1 ; python_full_version >= '3.11' \
     --hash=sha256:4659bc2a667783e7a15d190f6fccf8b2486685b6dba4c19c3876314769c57526 \
     --hash=sha256:b4fa3a7a0be38243123cf9d1f3518da10c51bdb165a2b2985566247f9155a7d3
-    # via pip-audit
-platformdirs==4.12.4 ; python_full_version < '3.11' \
-    --hash=sha256:63743c02414e755de4e31b8f68125c1407495b86c5a006e203c01ff8b9924250 \
-    --hash=sha256:78bfb9db2a8471ed7eebe3c3c932da413911042994e699b384fbb4493fa872d7
     # via pip-audit
 platformdirs==4.14.8 ; python_full_version >= '3.11' \
     --hash=sha256:1e34af590de4d978631b751eb2202f2fee4497537a17c1720b12fcf57b331392 \
@@ -969,7 +959,7 @@ pluggy==1.7.0 \
     # via
     #   hatchling
     #   pytest
-py-serializable==2.2.0 \
+py-serializable==2.2.0 ; python_full_version >= '3.11' \
     --hash=sha256:2cce775abc5aac12115f9ff572a145c7276d04a770090334bd4e51ed9c782415 \
     --hash=sha256:8e4fa02e8de819c0488ccdb69c2d3109274adcf224c02357fd8729cb12727aab
     # via cyclonedx-python-lib
@@ -1136,7 +1126,7 @@ pygments==2.21.0 \
     #   pytest
     #   readme-renderer
     #   rich
-pyparsing==3.3.3 \
+pyparsing==3.3.3 ; python_full_version >= '3.11' \
     --hash=sha256:928ae7e20211f3b6f3915a72f06a0cfd29ab9d24279dd6346b6b1a7146397d36 \
     --hash=sha256:ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4
     # via pip-requirements-parser
@@ -1209,7 +1199,7 @@ sniffio==1.3.1 \
     # via
     #   anthropic
     #   openai
-sortedcontainers==2.4.0 \
+sortedcontainers==2.4.0 ; python_full_version >= '3.11' \
     --hash=sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88 \
     --hash=sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0
     # via cyclonedx-python-lib
@@ -1284,7 +1274,7 @@ tomli==2.5.0 \
     #   hatchling
     #   pip-audit
     #   pytest
-tomli-w==1.2.0 \
+tomli-w==1.2.0 ; python_full_version >= '3.11' \
     --hash=sha256:188306098d013b691fcadc011abd66727d3c414c571bb01b1a174ba8c983cf90 \
     --hash=sha256:2dd14fac5a47c27be9cd4c976af5a12d87fb1f0b4512f81d69cce3b35ae25021
     # via pip-audit
