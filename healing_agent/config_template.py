@@ -15,7 +15,7 @@ import os
 # renamed or removed, and is then set to the release that ships that change.
 # healing_agent compares it with its own CONFIG_SCHEMA_VERSION on load and
 # fills in any behavior key this file predates, so an older config keeps working.
-HEALING_AGENT_CONFIG_VERSION = "0.5.0"
+HEALING_AGENT_CONFIG_VERSION = "0.7.0"
 AI_PROVIDER = os.getenv("HEALING_AGENT_PROVIDER", "azure")
 
 # Sampling parameters
